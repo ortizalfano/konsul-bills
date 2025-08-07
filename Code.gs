@@ -103,7 +103,7 @@ function createQuoteFromNotes(notes) {
   const prompt =
     'Eres un asistente que extrae datos de cotización. ' +
     'Del texto proporcionado, devuelve EXACTAMENTE un JSON con esta estructura:\n' +
-    '{"clientName":"","items":[{"description":"","price":0}],"total":0,"summary":""}\n' +
+    '{"clientName":"","subject":"","date":"","item":"","amount":0}\n' +
     'Texto:\n"""' + notes + '"""';
 
   const options = {
@@ -124,23 +124,30 @@ function createQuoteFromNotes(notes) {
     parsed = JSON.parse(candidate);
   } catch (e) {
     Logger.log('Error parsing Gemini output: ' + e);
-    parsed = { clientName: '', items: [], total: 0, summary: notes };
+     parsed = {};
   }
 
-  const { clientName, items, total, summary } = parsed;
+  const clientName = typeof parsed.clientName === 'string' ? parsed.clientName : '';
+  const subject = typeof parsed.subject === 'string' ? parsed.subject : '';
+  const dateStr = typeof parsed.date === 'string' ? parsed.date : '';
+  const item = typeof parsed.item === 'string' ? parsed.item : '';
+  const amount = typeof parsed.amount === 'number' ? parsed.amount : 0;
+  let dateObj = new Date(dateStr);
+  if (!dateStr || isNaN(dateObj.getTime())) dateObj = new Date();
+
   const ss = SpreadsheetApp.openById(ssId);
 
   // Guardar en Quotes
   const sheetQ = ss.getSheetByName(QUOTES_SHEET_NAME);
   const quoteID = 'quote_' + Date.now();
-  sheetQ.appendRow([quoteID, clientName, summary, total, 'Draft', new Date(), '', '']);
+  sheetQ.appendRow([quoteID, clientName, subject || item, amount, 'Draft', dateObj, '', '']);
 
   // Guardar en Billing (para UI)
   const sheetB = ss.getSheetByName(BILLING_SHEET_NAME);
-  const desc = items.map(i => i.description + ': $' + i.price).join('; ') || summary;
-  sheetB.appendRow([quoteID, 'Quote', desc, total, 'Draft', clientName]);
+  const desc = item || subject;
+  sheetB.appendRow([quoteID, 'Quote', desc, amount, 'Draft', clientName]);
 
-  return { success: true, quoteID: quoteID };
+  return { success: true, quoteID: quoteID, clientName, subject, date: dateStr, item, amount };
 }
 
 // =========================

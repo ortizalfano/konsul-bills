@@ -1,0 +1,46 @@
+{
+  "timeZone": "Europe/Lisbon",
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "GmailApp",
+        "serviceId": "gmail",
+        "version": "v1"
+      },
+      {
+        "userSymbol": "DriveApp",
+        "serviceId": "drive",
+        "version": "v2"
+      },
+      {
+        "userSymbol": "DocumentApp",
+        "serviceId": "docs",
+        "version": "v1"
+      },
+      {
+        "userSymbol": "Sheets",
+        "serviceId": "sheets",
+        "version": "v4"
+      }
+    ]
+  },
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/script.external_request"
+  ],
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "webapp": {
+    "executeAs": "USER_ACCESSING",
+    "access": "ANYONE"
+  },
+  "urlFetchWhitelist": [
+    "https://www.googleapis.com/",
+    "https://generativelanguage.googleapis.com/"
+  ]
+}

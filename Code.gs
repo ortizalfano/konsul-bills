@@ -33,26 +33,105 @@ function ensureSheets_() {
   const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
   if (!ssId) return;
   const ss = SpreadsheetApp.openById(ssId);
-  if (!ss.getSheetByName(QUOTES_SHEET_NAME)) {
+  const QUOTES_HEADERS   = ['quoteID','clientName','subject','item','total','status','quoteDate','invoiceID','threadId'];
+  const INVOICES_HEADERS = ['invoiceID','quoteID','clientEmail','subject','item','amount','status','quoteDate','dateCreated'];
+
+  let sheet = ss.getSheetByName(QUOTES_SHEET_NAME);
+  if (!sheet) {
     ss.insertSheet(QUOTES_SHEET_NAME)
-      .getRange('A1:H1')
-      .setValues([[
-        'quoteID','clientName','description','total','status','dateCreated','invoiceID','threadId'
-      ]]);
+      .getRange(1,1,1,QUOTES_HEADERS.length)
+      .setValues([QUOTES_HEADERS]);
+  } else {
+    const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+    const needsMigration = headers.length !== QUOTES_HEADERS.length || headers.some((h,i) => h !== QUOTES_HEADERS[i]);
+    if (needsMigration) {
+      const data = sheet.getDataRange().getValues().slice(1);
+      let newData;
+      if (headers.includes('description')) {
+        // Migrar desde versión antigua
+        newData = data.map(r => [
+          r[0], // quoteID
+          r[1], // clientName
+          '',   // subject no disponible
+          r[2], // item desde description
+          r[3], // total
+          r[4], // status
+          r[5], // quoteDate desde dateCreated
+          r[6] || '',
+          r[7] || ''
+        ]);
+      } else {
+        newData = data.map(r => [
+          r[0] || '', r[1] || '', r[2] || '', r[3] || '', r[4] || '', r[5] || '', r[6] || '', r[7] || '', r[8] || ''
+        ]);
+      }
+      sheet.clear();
+      sheet.getRange(1,1,1,QUOTES_HEADERS.length).setValues([QUOTES_HEADERS]);
+      if (newData.length)
+        sheet.getRange(2,1,newData.length,QUOTES_HEADERS.length).setValues(newData);
+    }
   }
-  if (!ss.getSheetByName(INVOICES_SHEET_NAME)) {
+  sheet = ss.getSheetByName(INVOICES_SHEET_NAME);
+  if (!sheet) {
     ss.insertSheet(INVOICES_SHEET_NAME)
-      .getRange('A1:F1')
-      .setValues([[
-        'invoiceID','quoteID','clientEmail','amount','status','dateCreated'
-      ]]);
+      .getRange(1,1,1,INVOICES_HEADERS.length)
+      .setValues([INVOICES_HEADERS]);
+  } else {
+    const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+    const needsMigration = headers.length !== INVOICES_HEADERS.length || headers.some((h,i) => h !== INVOICES_HEADERS[i]);
+    if (needsMigration) {
+      const data = sheet.getDataRange().getValues().slice(1);
+      let newData;
+      if (headers.length === 6 && headers[3] === 'amount') {
+        // Migrar desde versión antigua
+        newData = data.map(r => [
+          r[0], // invoiceID
+          r[1], // quoteID
+          r[2], // clientEmail
+          '',   // subject
+          '',   // item
+          r[3], // amount
+          r[4], // status
+          '',   // quoteDate
+          r[5]  // dateCreated
+        ]);
+      } else {
+          newData = data.map(r => [
+            r[0] || '', r[1] || '', r[2] || '', r[3] || '', r[4] || '', r[5] || '', r[6] || '', r[7] || '', r[8] || ''
+          ]);
+      }
+      sheet.clear();
+      sheet.getRange(1,1,1,INVOICES_HEADERS.length).setValues([INVOICES_HEADERS]);
+      if (newData.length)
+        sheet.getRange(2,1,newData.length,INVOICES_HEADERS.length).setValues(newData);
+    }
   }
+
   if (!ss.getSheetByName(BILLING_SHEET_NAME)) {
     ss.insertSheet(BILLING_SHEET_NAME)
-      .getRange('A1:F1')
+      .getRange('A1:H1')
       .setValues([[
-        'id','type','description','amount','status','email'
+         'id','type','description','amount','status','clientName','clientEmail','subject'
       ]]);
+       } else {
+    const sheetB = ss.getSheetByName(BILLING_SHEET_NAME);
+    const headers = sheetB.getRange(1, 1, 1, sheetB.getLastColumn()).getValues()[0];
+    let nameCol = headers.indexOf('clientName') + 1;
+    if (!nameCol) {
+      const emailCol = headers.indexOf('email') + 1;
+      if (emailCol) {
+        sheetB.getRange(1, emailCol).setValue('clientName');
+        nameCol = emailCol;
+      } else {
+        sheetB.insertColumnAfter(5);
+        sheetB.getRange(1, 6).setValue('clientName');
+        nameCol = 6;
+      }
+    }
+    if (headers.indexOf('clientEmail') === -1) {
+      sheetB.insertColumnAfter(nameCol);
+      sheetB.getRange(1, nameCol + 1).setValue('clientEmail');
+    }
   }
 }
 
@@ -74,18 +153,47 @@ function doGet(e) {
 function getBillingRecords() {
   const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
   if (!ssId) throw new Error('Spreadsheet no configurado');
-  const rows = SpreadsheetApp.openById(ssId)
-    .getSheetByName(BILLING_SHEET_NAME)
+   const ss = SpreadsheetApp.openById(ssId);
+
+  const billingRows = ss.getSheetByName(BILLING_SHEET_NAME)
     .getDataRange()
     .getValues();
-  return rows.slice(1).map(r => ({
-    id: r[0],
-    type: r[1],
-    description: r[2],
-    amount: r[3],
-    status: r[4],
-    email: r[5]
-  }));
+   // Build a map of quote details to enrich billing records
+  const quotesSheet = ss.getSheetByName(QUOTES_SHEET_NAME);
+  const quotesData = quotesSheet ? quotesSheet.getDataRange().getValues() : [];
+  const quoteHeaders = quotesData[0] || [];
+  const qIdIdx = quoteHeaders.indexOf('quoteID');
+  const qSubjectIdx = quoteHeaders.indexOf('subject');
+  const qItemIdx = quoteHeaders.indexOf('item');
+  const qDateIdx = quoteHeaders.indexOf('dateCreated');
+
+  const quoteMap = {};
+  for (let i = 1; i < quotesData.length; i++) {
+    const row = quotesData[i];
+    const id = qIdIdx >= 0 ? row[qIdIdx] : null;
+    if (!id) continue;
+    quoteMap[id] = {
+      subject: qSubjectIdx >= 0 ? row[qSubjectIdx] : '',
+      item: qItemIdx >= 0 ? row[qItemIdx] : '',
+      quoteDate: qDateIdx >= 0 ? row[qDateIdx] : null
+    };
+  }
+
+  return billingRows.slice(1).map(r => {
+    const details = quoteMap[r[0]] || {};
+    return {
+      id: r[0],
+      type: r[1],
+      description: r[2],
+      amount: r[3],
+      status: r[4],
+      clientName: r[5],
+      clientEmail: r[6],
+      subject: details.subject || '',
+      item: details.item || '',
+      quoteDate: details.quoteDate ? Utilities.formatDate(new Date(details.quoteDate), Session.getScriptTimeZone(), 'yyyy-MM-dd') : ''
+    };
+  });
 }
 
 // =========================
@@ -103,7 +211,7 @@ function createQuoteFromNotes(notes) {
   const prompt =
     'Eres un asistente que extrae datos de cotización. ' +
     'Del texto proporcionado, devuelve EXACTAMENTE un JSON con esta estructura:\n' +
-    '{"clientName":"","subject":"","date":"","item":"","amount":0}\n' +
+    '{"clientName":"","clientEmail":"","subject":"","date":"","item":"","amount":0}\n' +
     'Texto:\n"""' + notes + '"""';
 
   const options = {
@@ -128,29 +236,30 @@ function createQuoteFromNotes(notes) {
   }
 
   const clientName = typeof parsed.clientName === 'string' ? parsed.clientName : '';
+  const clientEmail = typeof parsed.clientEmail === 'string' ? parsed.clientEmail : '';
   const subject = typeof parsed.subject === 'string' ? parsed.subject : '';
   const dateStr = typeof parsed.date === 'string' ? parsed.date : '';
   const item = typeof parsed.item === 'string' ? parsed.item : '';
   const amount = typeof parsed.amount === 'number' ? parsed.amount : 0;
-  let dateObj = new Date(dateStr);
-  if (!dateStr || isNaN(dateObj.getTime())) dateObj = new Date();
+  let quoteDate = new Date(dateStr);
+  if (!dateStr || isNaN(quoteDate.getTime())) quoteDate = new Date();
 
   const ss = SpreadsheetApp.openById(ssId);
 
   // Guardar en Quotes
   const sheetQ = ss.getSheetByName(QUOTES_SHEET_NAME);
   const quoteID = 'quote_' + Date.now();
-  sheetQ.appendRow([quoteID, clientName, subject || item, amount, 'Draft', dateObj, '', '']);
+  sheetQ.appendRow([quoteID, clientName, subject, item, amount, 'Draft', quoteDate, '', '']);
 
   // Guardar en Billing (para UI)
   const sheetB = ss.getSheetByName(BILLING_SHEET_NAME);
   const desc = item || subject;
-  sheetB.appendRow([quoteID, 'Quote', desc, amount, 'Draft', clientName]);
+  sheetB.appendRow([quoteID, 'Quote', desc, amount, 'Draft', clientName, '', subject]);
 
-  return { success: true, quoteID: quoteID, clientName, subject, date: dateStr, item, amount };
+  return { success: true, quoteID: quoteID, clientName, clientEmail, subject, date: dateStr, item, amount };
 }
 
-// =========================
+// =========================  
 // ENVÍO DE COTIZACIÓN MANUAL
 // =========================
 function sendQuote(id) {
@@ -160,8 +269,13 @@ function sendQuote(id) {
   const vals = sheet.getDataRange().getValues();
   for (let i = 1; i < vals.length; i++) {
     if (vals[i][0] === id && vals[i][1] === 'Quote') {
-      GmailApp.sendEmail(vals[i][5], 'Cotización',
-        'Estimado ' + vals[i][5] + ', adjunto tu cotización. Monto: $' + vals[i][3]
+      const email = vals[i][6];
+      const name = vals[i][5];
+      const subject = vals[i][7] || 'Cotización';
+      GmailApp.sendEmail(
+        email,
+        subject,
+        'Estimado ' + name + ', adjunto tu cotización. Monto: $' + vals[i][3]
       );
       sheet.getRange(i + 1, 5).setValue('Sent');
       return { success: true };
@@ -198,16 +312,16 @@ function followUpQuotesAndInvoices() {
 
   ss.getSheetByName(QUOTES_SHEET_NAME).getDataRange().getValues().slice(1)
     .forEach(r => {
-      const diff = Math.floor((today - new Date(r[5])) / (1000*60*60*24));
-      if (r[4] === 'Sent' && diff > 3 && diff % 3 === 0) {
+      const diff = Math.floor((today - new Date(r[6])) / (1000*60*60*24));
+      if (r[5] === 'Sent' && diff > 3 && diff % 3 === 0) {
         GmailApp.sendEmail(r[1], 'Seguimiento cotización', 'Revisa tu cotización.');
       }
     });
 
   ss.getSheetByName(INVOICES_SHEET_NAME).getDataRange().getValues().slice(1)
     .forEach(r => {
-      const diff = Math.floor((today - new Date(r[5])) / (1000*60*60*24));
-      if (r[4] === 'Unpaid' && diff > 7 && diff % 7 === 0) {
+      const diff = Math.floor((today - new Date(r[8])) / (1000*60*60*24));
+      if (r[6] === 'Unpaid' && diff > 7 && diff % 7 === 0) {
         GmailApp.sendEmail(r[2], 'Recordatorio factura', 'Factura ' + r[0] + ' pendiente.');
       }
     });

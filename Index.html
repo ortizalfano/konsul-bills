@@ -34,6 +34,9 @@
     .status-Draft { background:var(--text-light); } .status-Sent { background:var(--priority-medium); } .status-Unpaid { background:var(--priority-high); } .status-Paid { background:var(--priority-paid); }
     .record-actions button { background:none; border:1px solid var(--border-color); padding:5px 12px; border-radius:6px; cursor:pointer; transition:all 0.2s; font-weight:500; }
     .record-actions button:hover { background:var(--bg-light); }
+        .filter-group { margin-bottom:20px; }
+    .filter-group .list-title { text-transform:uppercase; color:var(--text-light); font-size:0.8em; font-weight:600; margin-bottom:10px; padding-left:10px; }
+    .filter-group input { width:100%; padding:8px; border:1px solid var(--border-color); border-radius:8px; }
     .fab { position:absolute; bottom:30px; right:30px; width:56px; height:56px; background:var(--primary-blue); color:#fff; border-radius:50%; border:none; font-size:28px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.2); cursor:pointer; }
     .fab:hover { transform:scale(1.05); }
     .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:1000; }
@@ -56,6 +59,10 @@
       <div class="summary-cards">
         <div class="card"><div class="count" id="total-records-count">0</div><div class="label">Todos</div></div>
         <div class="card"><div class="count" id="paid-records-count">0</div><div class="label">Pagados</div></div>
+      </div>
+      <div class="filter-group" id="date-filter-group">
+        <div class="list-title">Filtrar por Fecha</div>
+        <input type="date" id="filter-date" />
       </div>
       <ul class="filter-list" id="status-filters">
         <li class="list-title">Filtrar por Estado</li>
@@ -90,11 +97,15 @@
   <div class="loader-overlay" id="loader"><div class="loader"></div></div>
   <script>
     let allRecords = [];
-    let currentFilters = { status: null, type: 'all' };
+     let currentFilters = { status: null, type: 'all', date: null };
     document.addEventListener('DOMContentLoaded', () => { fetchRecords(); setupEventListeners(); });
     function setupEventListeners() {
       document.getElementById('status-filters').addEventListener('click', handleFilterClick);
       document.getElementById('type-filters').addEventListener('click', handleFilterClick);
+      document.getElementById('filter-date').addEventListener('change', e => {
+        currentFilters.date = e.target.value || null;
+        applyFiltersAndRender();
+      });
       document.getElementById('add-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'flex');
       document.getElementById('cancel-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'none');
       document.getElementById('create-quote-btn').addEventListener('click', () => {
@@ -123,6 +134,7 @@
       let recs = [...allRecords];
       if (currentFilters.status) recs = recs.filter(r => r.status === currentFilters.status);
       if (currentFilters.type !== 'all') recs = recs.filter(r => r.type === currentFilters.type);
+      if (currentFilters.date) recs = recs.filter(r => r.quoteDate && r.quoteDate.startsWith(currentFilters.date));
       renderRecords(recs);
       document.getElementById('total-records-count').textContent = allRecords.length;
       document.getElementById('paid-records-count').textContent = allRecords.filter(r => r.status === 'Paid').length;
@@ -134,12 +146,16 @@
         const div = document.createElement('div'); div.className='record-item'; div.dataset.id=r.id;
         div.innerHTML = `
           <div class="record-item-main">
-            <div class="record-description">${r.description}</div>
+        div.innerHTML = `
+          <div class="record-item-main">
+            <div class="record-description">${mainDesc}</div>
             <div class="record-details">
               <span>${r.type}</span>
+              ${r.quoteDate?`<span><strong>Fecha:</strong> ${r.quoteDate}</span>`:''}
               <span><strong>ID:</strong> ${r.id}</span>
               <span><strong>Monto:</strong> $${r.amount}</span>
-              <span><strong>Email:</strong> ${r.email}</span>
+              <span><strong>Cliente:</strong> ${r.clientName}</span>
+              <span><strong>Email:</strong> ${r.clientEmail}</span>
             </div>
           </div>
           <div class="status-tag status-${r.status}">${r.status}</div>

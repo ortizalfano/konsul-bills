@@ -33,7 +33,7 @@ function ensureSheets_() {
   const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
   if (!ssId) return;
   const ss = SpreadsheetApp.openById(ssId);
-  const QUOTES_HEADERS   = ['quoteID','clientName','subject','item','total','status','quoteDate','invoiceID','threadId'];
+  const QUOTES_HEADERS   = ['quoteID','clientName','clientEmail','subject','item','total','status','quoteDate','invoiceID','threadId'];
   const INVOICES_HEADERS = ['invoiceID','quoteID','clientEmail','subject','item','amount','status','quoteDate','dateCreated'];
 
   let sheet = ss.getSheetByName(QUOTES_SHEET_NAME);
@@ -52,6 +52,7 @@ function ensureSheets_() {
         newData = data.map(r => [
           r[0], // quoteID
           r[1], // clientName
+          '',   // clientEmail no disponible
           '',   // subject no disponible
           r[2], // item desde description
           r[3], // total
@@ -62,7 +63,16 @@ function ensureSheets_() {
         ]);
       } else {
         newData = data.map(r => [
-          r[0] || '', r[1] || '', r[2] || '', r[3] || '', r[4] || '', r[5] || '', r[6] || '', r[7] || '', r[8] || ''
+          r[0] || '',
+          r[1] || '',
+          '',
+          r[2] || '',
+          r[3] || '',
+          r[4] || '',
+          r[5] || '',
+          r[6] || '',
+          r[7] || '',
+          r[8] || ''
         ]);
       }
       sheet.clear();
@@ -165,7 +175,7 @@ function getBillingRecords() {
   const qIdIdx = quoteHeaders.indexOf('quoteID');
   const qSubjectIdx = quoteHeaders.indexOf('subject');
   const qItemIdx = quoteHeaders.indexOf('item');
-  const qDateIdx = quoteHeaders.indexOf('dateCreated');
+  const qDateIdx = quoteHeaders.indexOf('quoteDate');
 
   const quoteMap = {};
   for (let i = 1; i < quotesData.length; i++) {
@@ -249,12 +259,12 @@ function createQuoteFromNotes(notes) {
   // Guardar en Quotes
   const sheetQ = ss.getSheetByName(QUOTES_SHEET_NAME);
   const quoteID = 'quote_' + Date.now();
-  sheetQ.appendRow([quoteID, clientName, subject, item, amount, 'Draft', quoteDate, '', '']);
+  sheetQ.appendRow([quoteID, clientName, clientEmail, subject, item, amount, 'Draft', quoteDate, '', '']);
 
   // Guardar en Billing (para UI)
   const sheetB = ss.getSheetByName(BILLING_SHEET_NAME);
   const desc = item || subject;
-  sheetB.appendRow([quoteID, 'Quote', desc, amount, 'Draft', clientName, '', subject]);
+  sheetB.appendRow([quoteID, 'Quote', desc, amount, 'Draft', clientName, clientEmail, subject]);
 
   return { success: true, quoteID: quoteID, clientName, clientEmail, subject, date: dateStr, item, amount };
 }
@@ -310,19 +320,44 @@ function followUpQuotesAndInvoices() {
   const ss = SpreadsheetApp.openById(ssId);
   const today = new Date();
 
-  ss.getSheetByName(QUOTES_SHEET_NAME).getDataRange().getValues().slice(1)
-    .forEach(r => {
-      const diff = Math.floor((today - new Date(r[6])) / (1000*60*60*24));
-      if (r[5] === 'Sent' && diff > 3 && diff % 3 === 0) {
-        GmailApp.sendEmail(r[1], 'Seguimiento cotización', 'Revisa tu cotización.');
-      }
-    });
+  const billingSheet = ss.getSheetByName(BILLING_SHEET_NAME);
+  const billingRows = billingSheet ? billingSheet.getDataRange().getValues() : [];
+  const emailMap = {};
+  for (let i = 1; i < billingRows.length; i++) {
+    const r = billingRows[i];
+    emailMap[r[0]] = r[6];
+  }
 
-  ss.getSheetByName(INVOICES_SHEET_NAME).getDataRange().getValues().slice(1)
-    .forEach(r => {
-      const diff = Math.floor((today - new Date(r[8])) / (1000*60*60*24));
-      if (r[6] === 'Unpaid' && diff > 7 && diff % 7 === 0) {
-        GmailApp.sendEmail(r[2], 'Recordatorio factura', 'Factura ' + r[0] + ' pendiente.');
+ const qSheet = ss.getSheetByName(QUOTES_SHEET_NAME);
+  if (qSheet) {
+    const qData = qSheet.getDataRange().getValues();
+    const qHeaders = qData[0] || [];
+    const qIdIdx = qHeaders.indexOf('quoteID');
+    const qStatusIdx = qHeaders.indexOf('status');
+    const qDateIdx = qHeaders.indexOf('quoteDate');
+    const qEmailIdx = qHeaders.indexOf('clientEmail');
+
+    qData.slice(1).forEach(r => {
+      const diff = Math.floor((today - new Date(r[qDateIdx])) / (1000 * 60 * 60 * 24));
+      if (r[qStatusIdx] === 'Sent' && diff > 3 && diff % 3 === 0) {
+        let clientEmail = qEmailIdx >= 0 ? r[qEmailIdx] : '';
+        if (!clientEmail) clientEmail = emailMap[r[qIdIdx]] || '';
+        if (clientEmail)
+          GmailApp.sendEmail(clientEmail, 'Seguimiento cotización', 'Revisa tu cotización.');
       }
     });
+    }
+
+  const iSheet = ss.getSheetByName(INVOICES_SHEET_NAME);
+  if (iSheet) {
+    iSheet.getDataRange().getValues().slice(1)
+      .forEach(r => {
+        const diff = Math.floor((today - new Date(r[8])) / (1000 * 60 * 60 * 24));
+        if (r[6] === 'Unpaid' && diff > 7 && diff % 7 === 0) {
+          const clientEmail = r[2] || emailMap[r[0]] || '';
+          if (clientEmail)
+            GmailApp.sendEmail(clientEmail, 'Recordatorio factura', 'Factura ' + r[0] + ' pendiente.');
+        }
+      });
+  }
 }

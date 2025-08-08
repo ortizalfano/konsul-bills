@@ -210,6 +210,11 @@ function getBillingRecords() {
 // CREAR COTIZACIÓN DESDE GEMINI
 // =========================
 function createQuoteFromNotes(notes) {
+  Logger.log('Iniciando creación de cotización desde notas');
+  if (typeof notes !== 'string' || notes.trim() === '') {
+    Logger.log('Notas vacías o no provistas');
+    return { success: false, error: 'Notas vacías' };
+  }
   const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
   if (!ssId) return { success: false };
   ensureSheets_();
@@ -231,42 +236,118 @@ function createQuoteFromNotes(notes) {
     muteHttpExceptions: true
   };
 
+  Logger.log('Enviando petición a Gemini');
   const response = UrlFetchApp.fetch(url, options);
+    const status = response.getResponseCode();
+  Logger.log('Código de respuesta: ' + status);
+  if (status !== 200) {
+    Logger.log('Error en llamada a Gemini: ' + response.getContentText());
+    return { success: false, error: 'Error en API Gemini', status: status };
+  }
+
+
   const textResponse = response.getContentText();
   Logger.log('Gemini raw response: ' + textResponse);
 
-  let parsed;
+  let parsed = {};
   try {
-    const candidate = JSON.parse(textResponse).candidates[0].content.parts[0].text.trim();
-    Logger.log('Gemini candidate JSON: ' + candidate);
-    parsed = JSON.parse(candidate);
+     const candidate = JSON.parse(textResponse).candidates[0].content.parts[0].text || '';
+    Logger.log('Gemini candidate: ' + candidate);
+    let cleaned = candidate.replace(/```json|```/gi, '').trim();
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (err) {
+      Logger.log('Error parseando candidato, intentando limpiar: ' + err);
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start >= 0 && end >= 0) {
+        const sub = cleaned.substring(start, end + 1);
+        try { parsed = JSON.parse(sub); }
+        catch (err2) { Logger.log('Fallback parse fallido: ' + err2); }
+      }
+    }
+  
   } catch (e) {
-    Logger.log('Error parsing Gemini output: ' + e);
-     parsed = {};
+    Logger.log('Error general parsing Gemini output: ' + e);
   }
 
-  const clientName = typeof parsed.clientName === 'string' ? parsed.clientName : '';
-  const clientEmail = typeof parsed.clientEmail === 'string' ? parsed.clientEmail : '';
-  const subject = typeof parsed.subject === 'string' ? parsed.subject : '';
-  const dateStr = typeof parsed.date === 'string' ? parsed.date : '';
-  const item = typeof parsed.item === 'string' ? parsed.item : '';
-  const amount = typeof parsed.amount === 'number' ? parsed.amount : 0;
-  let quoteDate = new Date(dateStr);
-  if (!dateStr || isNaN(quoteDate.getTime())) quoteDate = new Date();
+  const fields = { clientName: '', clientEmail: '', subject: '', date: '', item: '', amount: 0 };
+  Object.keys(fields).forEach(k => {
+    const v = parsed[k];
+    if (k === 'amount') {
+      if (typeof v === 'number') fields[k] = v;
+    } else if (typeof v === 'string') {
+      fields[k] = v;
+    }
+  });
+
+  if (!fields.clientEmail) {
+    const m = notes.match(/[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+    if (m) fields.clientEmail = m[0];
+  }
+  if (!fields.amount) {
+    const m = notes.match(/\d+(?:[.,]\d+)?/);
+    if (m) fields.amount = parseFloat(m[0].replace(',', '.'));
+  }
+  if (!fields.date) {
+    const m = notes.match(/\d{4}-\d{2}-\d{2}/) || notes.match(/\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}/);
+    if (m) fields.date = m[0];
+  }
+  if (!fields.clientName) {
+    const m = notes.match(/(?:client|cliente)[:\s]+([\w\s]+)/i);
+    if (m) fields.clientName = m[1].trim();
+  }
+  if (!fields.subject) {
+    const m = notes.match(/(?:subject|asunto)[:\s]+(.+)/i);
+    fields.subject = m ? m[1].split('\n')[0].trim() : notes.split('\n')[0].trim();
+  }
+  if (!fields.item) {
+    const m = notes.match(/(?:item|concepto|producto)[:\s]+(.+)/i);
+    if (m) fields.item = m[1].split('\n')[0].trim();
+  }
+
+  fields.amount = parseFloat(fields.amount) || 0;
+  let quoteDate = new Date(fields.date);
+  if (isNaN(quoteDate.getTime())) quoteDate = new Date();
+
+  Object.keys(fields).forEach(k => {
+    if (fields[k] === '' || fields[k] === 0) Logger.log('Campo faltante o vacío: ' + k);
+  });
 
   const ss = SpreadsheetApp.openById(ssId);
 
   // Guardar en Quotes
   const sheetQ = ss.getSheetByName(QUOTES_SHEET_NAME);
   const quoteID = 'quote_' + Date.now();
-  sheetQ.appendRow([quoteID, clientName, clientEmail, subject, item, amount, 'Draft', quoteDate, '', '']);
+    sheetQ.appendRow([
+    quoteID,
+    fields.clientName,
+    fields.clientEmail,
+    fields.subject,
+    fields.item,
+    fields.amount,
+    'Draft',
+    quoteDate,
+    '',
+    ''
+  ]);
 
   // Guardar en Billing (para UI)
   const sheetB = ss.getSheetByName(BILLING_SHEET_NAME);
-  const desc = item || subject;
-  sheetB.appendRow([quoteID, 'Quote', desc, amount, 'Draft', clientName, clientEmail, subject]);
+  const desc = fields.item || fields.subject;
+  sheetB.appendRow([
+    quoteID,
+    'Quote',
+    desc,
+    fields.amount,
+    'Draft',
+    fields.clientName,
+    fields.clientEmail,
+    fields.subject
+  ]);
 
-  return { success: true, quoteID: quoteID, clientName, clientEmail, subject, date: dateStr, item, amount };
+  Logger.log('Cotización creada con ID: ' + quoteID);
+  return { success: true, quoteID: quoteID, ...fields };
 }
 
 // =========================  

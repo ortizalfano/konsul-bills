@@ -99,6 +99,7 @@
         <button class="btn-primary" id="create-quote-btn">Crear Cotización</button>
       </div>
     </div>
+    </div>
     <div class="modal-overlay" id="edit-quote-modal">
       <div class="modal-content">
         <h2>Editar Cotización</h2>
@@ -195,7 +196,7 @@
             </div>
           </div>
            <div class="status-tag status-${r.status}">${r.status}</div>
-         <div class="record-actions">${actions.join('')}</div>
+         <div class="record-actions">${actions.join(' ')}</div>
         `;
         c.appendChild(div);
       });

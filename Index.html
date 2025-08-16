@@ -44,9 +44,15 @@
     .modal-content h2 { margin-bottom:20px; }
     .modal-content p { color:var(--text-light); margin-bottom:15px; font-size:0.9em; }
     .modal-content textarea { width:100%; height:150px; padding:10px; border-radius:8px; border:1px solid var(--border-color); font-family:inherit; font-size:1rem; margin-bottom:20px; }
+    .modal-content .field { margin-bottom:15px; }
+    .modal-content label { display:block; margin-bottom:5px; font-weight:500; }
+    .modal-content input, .modal-content select { width:100%; padding:10px; border-radius:8px; border:1px solid var(--border-color); }
     .modal-actions { display:flex; justify-content:flex-end; gap:10px; }
     .btn-cancel { background:#e9ecef; color:var(--text-dark); padding:10px 20px; border:none; border-radius:8px; cursor:pointer; }
     .btn-primary { background:var(--primary-blue); color:#fff; padding:10px 20px; border:none; border-radius:8px; cursor:pointer; }
+     .modal-field { margin-bottom:15px; }
+    .modal-field label { display:block; margin-bottom:5px; font-size:0.9em; color:var(--text-light); }
+    .modal-field input, .modal-field select { width:100%; padding:8px; border:1px solid var(--border-color); border-radius:8px; }
     .loader-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.7); display:none; justify-content:center; align-items:center; z-index:2000; }
     .loader { border:6px solid var(--bg-light); border-top:6px solid var(--brand-color); border-radius:50%; width:50px; height:50px; animation:spin 1s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
@@ -83,9 +89,9 @@
     </main>
   </div>
   <button class="fab" id="add-quote-btn">+</button>
-  <div class="modal-overlay" id="new-quote-modal">
-    <div class="modal-content">
-      <h2>Crear Cotización desde Notas</h2>
+   <div class="modal-overlay" id="new-quote-modal">
+      <div class="modal-content">
+        <h2>Crear Cotización desde Notas</h2>
       <p>Describe los requerimientos del cliente. La IA generará una descripción y un monto estimado para la cotización.</p>
       <textarea id="quote-notes-input" placeholder="Ej: El cliente necesita una campaña de marketing en redes sociales para 3 meses, enfocada en Instagram y Facebook. Incluir 12 posts y 2 reportes mensuales..."></textarea>
       <div class="modal-actions">
@@ -93,11 +99,72 @@
         <button class="btn-primary" id="create-quote-btn">Crear Cotización</button>
       </div>
     </div>
+    <div class="modal-overlay" id="edit-quote-modal">
+    <div class="modal-content">
+      <h2>Editar Cotización</h2>
+      <div class="modal-field"><label>Cliente</label><input type="text" id="edit-client-name"></div>
+      <div class="modal-field"><label>Email</label><input type="email" id="edit-client-email"></div>
+      <div class="modal-field"><label>Asunto</label><input type="text" id="edit-subject"></div>
+      <div class="modal-field"><label>Item</label><input type="text" id="edit-item"></div>
+      <div class="modal-field"><label>Monto</label><input type="number" id="edit-amount"></div>
+      <div class="modal-field"><label>Estado</label>
+        <select id="edit-status">
+          <option value="Draft">Draft</option>
+          <option value="Sent">Sent</option>
+          <option value="Unpaid">Unpaid</option>
+          <option value="Paid">Paid</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="cancel-edit-btn">Cancelar</button>
+        <button class="btn-primary" id="save-edit-btn">Guardar</button>
+      </div>
+    </div>
   </div>
-  <div class="loader-overlay" id="loader"><div class="loader"></div></div>
-  <script>
-    let allRecords = [];
-     let currentFilters = { status: null, type: 'all', date: null };
+ <div class="modal-overlay" id="edit-quote-modal">
+      <div class="modal-content">
+        <h2>Editar Cotización</h2>
+        <div class="field">
+          <label for="edit-id">ID</label>
+          <input type="text" id="edit-id" readonly>
+        </div>
+        <div class="field">
+          <label for="edit-client">Cliente</label>
+          <input type="text" id="edit-client">
+        </div>
+        <div class="field">
+          <label for="edit-email">Email</label>
+          <input type="email" id="edit-email">
+        </div>
+        <div class="field">
+          <label for="edit-date">Fecha</label>
+          <input type="date" id="edit-date">
+        </div>
+        <div class="field">
+          <label for="edit-amount">Monto</label>
+          <input type="number" id="edit-amount" step="0.01">
+        </div>
+        <div class="field">
+          <label for="edit-status">Estado</label>
+          <select id="edit-status">
+            <option value="Draft">Draft</option>
+            <option value="Sent">Sent</option>
+            <option value="Unpaid">Unpaid</option>
+            <option value="Paid">Paid</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-primary" onclick="saveQuoteEdits()">Guardar</button>
+          <button class="btn-primary" onclick="sendQuoteFromModal()">Enviar</button>
+          <button class="btn-cancel" onclick="document.getElementById('edit-quote-modal').style.display='none'">Cerrar</button>
+        </div>
+      </div>
+    </div>
+    <div class="loader-overlay" id="loader"><div class="loader"></div></div>
+    <script>
+      let allRecords = [];
+    let currentFilters = { status: null, type: 'all', date: null };
+    let editingId = null;
     document.addEventListener('DOMContentLoaded', () => { fetchRecords(); setupEventListeners(); });
     function setupEventListeners() {
       document.getElementById('status-filters').addEventListener('click', handleFilterClick);
@@ -115,6 +182,8 @@
         document.getElementById('new-quote-modal').style.display = 'none';
         google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).createQuoteFromNotes(notes);
       });
+      document.getElementById('save-edit-btn').addEventListener('click', saveQuoteEdits);
+      document.getElementById('cancel-edit-btn').addEventListener('click', () => document.getElementById('edit-quote-modal').style.display = 'none');
     }
     function showLoader() { document.getElementById('loader').style.display = 'flex'; }
     function hideLoader() { document.getElementById('loader').style.display = 'none'; }
@@ -147,6 +216,18 @@
         div.className = 'record-item';
         div.dataset.id = r.id;
         const mainDesc = r.description || r.subject || r.item || '';
+        const actions = [];
+        if (r.type==='Quote') {
+          actions.push(`<button onclick="openEditModal('${r.id}')">✏️ Editar</button>`);
+          if (r.status==='Draft') actions.push(`<button onclick="sendQuote('${r.id}')">✉️ Enviar</button>`);
+        }
+        const statusSelect = `
+          <select onchange="updateStatus('${r.id}', this.value)">
+            <option value="Draft" ${r.status==='Draft'?'selected':''}>Draft</option>
+            <option value="Sent" ${r.status==='Sent'?'selected':''}>Sent</option>
+            <option value="Unpaid" ${r.status==='Unpaid'?'selected':''}>Unpaid</option>
+            <option value="Paid" ${r.status==='Paid'?'selected':''}>Paid</option>
+          </select>`;
         div.innerHTML = `
           <div class="record-item-main">
             <div class="record-description">${mainDesc}</div>
@@ -159,13 +240,47 @@
               <span><strong>Email:</strong> ${r.clientEmail}</span>
             </div>
           </div>
-          <div class="status-tag status-${r.status}">${r.status}</div>
-          <div class="record-actions">${r.type==='Quote'&&r.status==='Draft'?'<button onclick="sendQuote(\''+r.id+'\')">✉️ Enviar</button>':''}</div>
+           <div class="status-tag status-${r.status}">${r.status}</div>
+          <div class="record-actions">${actions.join('')} ${statusSelect}</div>
         `;
         c.appendChild(div);
       });
     }
     function sendQuote(id) { showLoader(); google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).sendQuote(id); }
+    function openEditModal(id) {
+      const rec = allRecords.find(r => r.id===id);
+      if (!rec) return;
+      editingId = id;
+      document.getElementById('edit-client-name').value = rec.clientName || '';
+      document.getElementById('edit-client-email').value = rec.clientEmail || '';
+      document.getElementById('edit-subject').value = rec.subject || '';
+      document.getElementById('edit-item').value = rec.item || '';
+      document.getElementById('edit-amount').value = rec.amount || '';
+      document.getElementById('edit-status').value = rec.status || 'Draft';
+      document.getElementById('edit-quote-modal').style.display = 'flex';
+    }
+    function saveQuoteEdits() {
+      if (!editingId) return;
+      const data = {
+        id: editingId,
+        clientName: document.getElementById('edit-client-name').value.trim(),
+        clientEmail: document.getElementById('edit-client-email').value.trim(),
+        subject: document.getElementById('edit-subject').value.trim(),
+        item: document.getElementById('edit-item').value.trim(),
+        amount: parseFloat(document.getElementById('edit-amount').value) || 0,
+        status: document.getElementById('edit-status').value
+      };
+      showLoader();
+      document.getElementById('edit-quote-modal').style.display = 'none';
+      google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).updateQuote(data);
+    }
+    function updateStatus(id, status) {
+      const rec = allRecords.find(r => r.id===id);
+      if (!rec) return;
+      const data = { ...rec, status };
+      showLoader();
+      google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).updateQuote(data);
+    }
   </script>
 </body>
 </html>

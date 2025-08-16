@@ -350,13 +350,45 @@ function createQuoteFromNotes(notes) {
   return { success: true, quoteID: quoteID, ...fields };
 }
 
+// =========================
+// ACTUALIZAR COTIZACIÓN
+// =========================
+function updateQuote(data) {
+  const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
+  if (!ssId) return { success:false };
+  const ss = SpreadsheetApp.openById(ssId);
+  const qSheet = ss.getSheetByName(QUOTES_SHEET_NAME);
+  const bSheet = ss.getSheetByName(BILLING_SHEET_NAME);
+  const qVals = qSheet.getDataRange().getValues();
+  const bVals = bSheet.getDataRange().getValues();
+
+  for (let i = 1; i < qVals.length; i++) {
+    if (qVals[i][0] === data.id) {
+      qSheet.getRange(i+1,2,1,6).setValues([[data.clientName, data.clientEmail,
+        data.subject, data.item, data.amount, data.status]]);
+      break;
+    }
+  }
+  for (let j = 1; j < bVals.length; j++) {
+    if (bVals[j][0] === data.id) {
+      bSheet.getRange(j+1,3,1,5).setValues([[data.item || data.subject,
+        data.amount, data.status, data.clientName, data.clientEmail]]);
+      break;
+    }
+  }
+  return { success:true };
+}
+
+// =========================
+
 // =========================  
 // ENVÍO DE COTIZACIÓN MANUAL
 // =========================
 function sendQuote(id) {
   const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
   if (!ssId) return { success: false };
-  const sheet = SpreadsheetApp.openById(ssId).getSheetByName(BILLING_SHEET_NAME);
+  const ss = SpreadsheetApp.openById(ssId);
+  const sheet = ss.getSheetByName(BILLING_SHEET_NAME);
   const vals = sheet.getDataRange().getValues();
   for (let i = 1; i < vals.length; i++) {
     if (vals[i][0] === id && vals[i][1] === 'Quote') {
@@ -369,6 +401,15 @@ function sendQuote(id) {
         'Estimado ' + name + ', adjunto tu cotización. Monto: $' + vals[i][3]
       );
       sheet.getRange(i + 1, 5).setValue('Sent');
+
+      const qSheet = ss.getSheetByName(QUOTES_SHEET_NAME);
+      const qData  = qSheet.getDataRange().getValues();
+      for (let q = 1; q < qData.length; q++) {
+        if (qData[q][0] === id) {
+          qSheet.getRange(q + 1, 7).setValue('Sent');
+          break;
+        }
+      }
       return { success: true };
     }
   }

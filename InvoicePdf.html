@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 40px; }
+      .header { text-align: center; margin-bottom: 20px; }
+      .header img { max-height: 80px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      th, td { border: 1px solid #ddd; padding: 8px; }
+      th { background: #f2f2f2; }
+      .total { text-align: right; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQImWNgYGD4DwABBAEAaQOK6QAAAABJRU5ErkJggg==" alt="Logo">
+      <h1>Factura #<?= invoiceID ?></h1>
+    </div>
+    <div class="client">
+      <p><strong>Cliente:</strong> <?= clientEmail ?></p>
+      <p><strong>Fecha de emisión:</strong> <?= dateCreated ?></p>
+      <p><strong>ID de Cotización:</strong> <?= quoteID ?></p>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Concepto</th>
+          <th>Monto</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><?= item ?></td>
+          <td class="total">$<?= amount ?></td>
+        </tr>
+      </tbody>
+    </table>
+    <p><strong>Asunto:</strong> <?= subject ?></p>
+    <p><strong>Estatus:</strong> <?= status ?></p>
+  </body>
+</html>

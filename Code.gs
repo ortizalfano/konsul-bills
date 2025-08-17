@@ -316,6 +316,9 @@ function createQuoteFromNotes(notes) {
     if (m) fields.item = m[1].split('\n')[0].trim();
   }
 
+  if (!fields.clientName)  fields.clientName  = 'Por Actualizar';
+  if (!fields.clientEmail) fields.clientEmail = 'N/A';
+
   fields.amount = parseFloat(fields.amount) || 0;
   let quoteDate = new Date(fields.date);
   if (isNaN(quoteDate.getTime())) quoteDate = new Date();
@@ -328,11 +331,26 @@ function createQuoteFromNotes(notes) {
 
   // Guardar en Quotes
   const sheetQ = ss.getSheetByName(QUOTES_SHEET_NAME);
-  const quoteID = 'quote_' + Date.now();
-    sheetQ.appendRow([
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    return { success: false, error: 'No se pudo generar ID' };
+  }
+  let quoteID;
+  try {
+    const last = sheetQ.getRange(sheetQ.getLastRow(), 1).getValue();
+    const next = (parseInt(String(last).replace('COT', '')) + 1 || 1)
+      .toString()
+      .padStart(5, '0');
+    quoteID = 'COT' + next;
+  } finally {
+    lock.releaseLock();
+  }
+  const clientName = fields.clientName;
+  const clientEmail = fields.clientEmail;
+  sheetQ.appendRow([
     quoteID,
-    fields.clientName,
-    fields.clientEmail,
+    clientName,
+    clientEmail,
     fields.subject,
     fields.item,
     fields.amount,
@@ -351,8 +369,8 @@ function createQuoteFromNotes(notes) {
     desc,
     fields.amount,
     'Draft',
-    fields.clientName,
-    fields.clientEmail,
+    clientName,
+    clientEmail,
     fields.subject
   ]);
 
@@ -574,7 +592,12 @@ function followUpQuotesAndInvoices() {
     const qEmailIdx = qHeaders.indexOf('clientEmail');
 
     qData.slice(1).forEach(r => {
-      const diff = Math.floor((today - new Date(r[qDateIdx])) / (1000 * 60 * 60 * 24));
+      const qDate = new Date(r[qDateIdx]);
+      if (isNaN(qDate)) {
+        Logger.log('Invalid quoteDate for ID: ' + r[qIdIdx]);
+        return;
+      }
+      const diff = Math.floor((today - qDate) / (1000 * 60 * 60 * 24));
       if (r[qStatusIdx] === 'Sent' && diff > 3 && diff % 3 === 0) {
         let clientEmail = qEmailIdx >= 0 ? r[qEmailIdx] : '';
         if (!clientEmail) clientEmail = emailMap[r[qIdIdx]] || '';
@@ -588,7 +611,12 @@ function followUpQuotesAndInvoices() {
   if (iSheet) {
     iSheet.getDataRange().getValues().slice(1)
       .forEach(r => {
-        const diff = Math.floor((today - new Date(r[8])) / (1000 * 60 * 60 * 24));
+        const iDate = new Date(r[8]);
+        if (isNaN(iDate)) {
+          Logger.log('Invalid invoice date for ID: ' + r[0]);
+          return;
+        }
+        const diff = Math.floor((today - iDate) / (1000 * 60 * 60 * 24));
         if (r[6] === 'Sent' && diff > 7 && diff % 7 === 0) {
           const clientEmail = r[2] || emailMap[r[0]] || '';
           if (clientEmail)

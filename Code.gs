@@ -13,6 +13,10 @@ const QUOTES_SHEET_NAME   = 'Quotes';
 const INVOICES_SHEET_NAME = 'Invoices';
 const BILLING_SHEET_NAME  = 'Billing';
 
+// Estados permitidos
+const QUOTE_STATUSES = ['Draft','Sent'];
+const INVOICE_STATUSES = ['Draft','Sent','Paid','Cancelled'];
+
 // =========================
 // SETUP INICIAL
 // =========================
@@ -191,12 +195,18 @@ function getBillingRecords() {
 
   return billingRows.slice(1).map(r => {
     const details = quoteMap[r[0]] || {};
+    let status = r[4];
+    if (r[1] === 'Quote') {
+      if (!QUOTE_STATUSES.includes(status)) status = 'Draft';
+    } else if (r[1] === 'Invoice') {
+      if (!INVOICE_STATUSES.includes(status)) status = 'Draft';
+    }
     return {
       id: r[0],
       type: r[1],
       description: r[2],
       amount: r[3],
-      status: r[4],
+      status: status,
       clientName: r[5],
       clientEmail: r[6],
       subject: details.subject || '',
@@ -362,6 +372,8 @@ function updateQuote(data) {
   const qVals = qSheet.getDataRange().getValues();
   const bVals = bSheet.getDataRange().getValues();
 
+  if (!QUOTE_STATUSES.includes(data.status)) data.status = 'Draft';
+
   for (let i = 1; i < qVals.length; i++) {
     if (qVals[i][0] === data.id) {
       qSheet.getRange(i+1,2,1,6).setValues([[data.clientName, data.clientEmail,
@@ -378,6 +390,75 @@ function updateQuote(data) {
   }
   return { success:true };
 }
+
+// =========================
+// TRANSFORMAR COTIZACIÓN A FACTURA
+// =========================
+function transformQuoteToInvoice(id) {
+  const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
+  if (!ssId) return { success: false };
+  const ss = SpreadsheetApp.openById(ssId);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const qSheet = ss.getSheetByName(QUOTES_SHEET_NAME);
+    const iSheet = ss.getSheetByName(INVOICES_SHEET_NAME);
+    const bSheet = ss.getSheetByName(BILLING_SHEET_NAME);
+    if (!qSheet || !iSheet || !bSheet) return { success: false };
+
+    const qData = qSheet.getDataRange().getValues();
+    let qRow = null, qIndex = -1;
+    for (let i = 1; i < qData.length; i++) {
+      if (qData[i][0] === id) {
+        qRow = qData[i];
+        qIndex = i;
+        break;
+      }
+    }
+    if (!qRow) return { success: false };
+
+    const iData = iSheet.getDataRange().getValues();
+    let maxNum = 0;
+    for (let i = 1; i < iData.length; i++) {
+      const match = String(iData[i][0]).match(/^INV(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+    const invoiceID = 'INV' + Utilities.formatString('%03d', maxNum + 1);
+
+    iSheet.appendRow([
+      invoiceID,
+      id,
+      qRow[2],
+      qRow[3],
+      qRow[4],
+      qRow[5],
+      'Draft',
+      qRow[7],
+      new Date()
+    ]);
+
+    const bData = bSheet.getDataRange().getValues();
+    for (let i = 1; i < bData.length; i++) {
+      if (bData[i][0] === id && bData[i][1] === 'Quote') {
+        bSheet.getRange(i + 1, 1, 1, 5).setValues([[invoiceID, 'Invoice', bData[i][2], qRow[5], 'Draft']]);
+        break;
+      }
+    }
+
+    if (qIndex > 0) {
+      qSheet.getRange(qIndex + 1, 9).setValue(invoiceID);
+    }
+
+    return { success: true, invoiceID: invoiceID };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 
 // =========================
 
@@ -422,11 +503,22 @@ function sendQuote(id) {
 function markInvoicePaid(id) {
   const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
   if (!ssId) return { success: false };
-  const sheet = SpreadsheetApp.openById(ssId).getSheetByName(BILLING_SHEET_NAME);
-  const vals = sheet.getDataRange().getValues();
-  for (let i = 1; i < vals.length; i++) {
-    if (vals[i][0] === id && vals[i][1] === 'Invoice') {
-      sheet.getRange(i + 1, 5).setValue('Paid');
+  const ss = SpreadsheetApp.openById(ssId);
+  const bSheet = ss.getSheetByName(BILLING_SHEET_NAME);
+  const bVals = bSheet.getDataRange().getValues();
+  for (let i = 1; i < bVals.length; i++) {
+    if (bVals[i][0] === id && bVals[i][1] === 'Invoice') {
+      bSheet.getRange(i + 1, 5).setValue('Paid');
+      const iSheet = ss.getSheetByName(INVOICES_SHEET_NAME);
+      if (iSheet) {
+        const iVals = iSheet.getDataRange().getValues();
+        for (let j = 1; j < iVals.length; j++) {
+          if (iVals[j][0] === id) {
+            iSheet.getRange(j + 1, 7).setValue('Paid');
+            break;
+          }
+        }
+      }
       return { success: true };
     }
   }
@@ -497,7 +589,7 @@ function followUpQuotesAndInvoices() {
     iSheet.getDataRange().getValues().slice(1)
       .forEach(r => {
         const diff = Math.floor((today - new Date(r[8])) / (1000 * 60 * 60 * 24));
-        if (r[6] === 'Unpaid' && diff > 7 && diff % 7 === 0) {
+        if (r[6] === 'Sent' && diff > 7 && diff % 7 === 0) {
           const clientEmail = r[2] || emailMap[r[0]] || '';
           if (clientEmail)
             GmailApp.sendEmail(clientEmail, 'Recordatorio factura', 'Factura ' + r[0] + ' pendiente.');

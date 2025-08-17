@@ -4,6 +4,7 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"
   <title>Kônsul Billing</title>
   <style>
     :root { --brand-color:#00A99D; --primary-blue:#0d6efd; --light-blue:#e7f1ff; --text-dark:#212529; --text-light:#6c757d; --bg-light:#f8f9fa; --border-color:#dee2e6; --white:#ffffff; --priority-high:#dc3545; --priority-medium:#ffc107; --priority-low:#0dcaf0; --priority-paid:#198754; }
@@ -26,6 +27,7 @@
     .filter-list li:hover { background:#e9ecef; }
     .filter-list li.active { background:var(--light-blue); color:var(--primary-blue); font-weight:600; }
     .icon-dot { width:12px; height:12px; border-radius:50%; }
+    .type-icon { font-family: 'Material Icons'; font-size: 20px; margin-right: 8px; }
     .record-item { display:flex; align-items:center; padding:15px 10px; border-bottom:1px solid var(--border-color); }
     .record-item-main { flex:1; margin-left:15px; }
     .record-description { font-weight:500; }
@@ -182,7 +184,9 @@
           actions.push(`<button onclick="openEditModal('${r.id}')">✏️ Editar</button>`);
           if (r.status==='Draft') actions.push(`<button onclick="sendQuote('${r.id}')">✉️ Enviar</button>`);
         }
+        const icon = r.type === 'Quote' ? 'request_quote' : 'receipt_long';
         div.innerHTML = `
+        <span class="type-icon">${icon}</span>
           <div class="record-item-main">
             <div class="record-description">${mainDesc}</div>
             <div class="record-details">

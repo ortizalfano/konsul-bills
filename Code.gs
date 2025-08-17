@@ -434,6 +434,28 @@ function markInvoicePaid(id) {
 }
 
 // =========================
+// GENERAR PDF DE FACTURA
+// =========================
+function generateInvoicePdf(invoiceId) {
+  const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
+  const ss    = SpreadsheetApp.openById(ssId);
+  const sheet = ss.getSheetByName(INVOICES_SHEET_NAME);
+  const data  = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const row = data.find(r => r[0] === invoiceId);
+  if (!row) return null;
+
+  const tmpl = HtmlService.createTemplateFromFile('InvoicePdf');
+  headers.forEach((h, i) => tmpl[h] = row[i]);
+  const html = tmpl.evaluate().getContent();
+  const blob = Utilities.newBlob(html, 'text/html')
+    .getAs('application/pdf')
+    .setName(invoiceId + '.pdf');
+  return DriveApp.createFile(blob); // o devolver blob si se prefiere
+}
+
+
+// =========================
 // SEGUIMIENTO AUTOMÁTICO
 // =========================
 function followUpQuotesAndInvoices() {

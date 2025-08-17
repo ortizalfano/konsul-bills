@@ -186,12 +186,13 @@
           <div class="record-item-main">
             <div class="record-description">${mainDesc}</div>
             <div class="record-details">
-              <span>${r.type}</span>
-              ${r.quoteDate?`<span><strong>Fecha:</strong> ${r.quoteDate}</span>`:''}
+              
               <span><strong>ID:</strong> ${r.id}</span>
+               <span><strong>Cliente:</strong> ${r.clientName || 'Por Actualizar'}</span>
+              <span><strong>Email:</strong> ${r.clientEmail || 'N/A'}</span>
+              ${r.quoteDate ? `<span><strong>Fecha:</strong> ${r.quoteDate}</span>` : ''}
               <span><strong>Monto:</strong> $${r.amount}</span>
-              <span><strong>Cliente:</strong> ${r.clientName}</span>
-              <span><strong>Email:</strong> ${r.clientEmail}</span>
+              
             </div>
           </div>
            <div class="status-tag status-${r.status}">${r.status}</div>

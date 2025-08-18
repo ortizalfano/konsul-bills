@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <title>Kônsul Billing</title>
   <style>
     :root { --brand-color:#00A99D; --primary-blue:#0d6efd; --light-blue:#e7f1ff; --text-dark:#212529; --text-light:#6c757d; --bg-light:#f8f9fa; --border-color:#dee2e6; --white:#ffffff; --priority-high:#dc3545; --priority-medium:#ffc107; --priority-low:#0dcaf0; --priority-paid:#198754; }
@@ -68,9 +68,14 @@
         <div class="card"><div class="count" id="total-records-count">0</div><div class="label">Todos</div></div>
         <div class="card"><div class="count" id="paid-records-count">0</div><div class="label">Pagados</div></div>
       </div>
+       <div class="filter-group" id="text-filter-group">
+        <div class="list-title">Buscar</div>
+        <input type="text" id="filter-text" placeholder="Nombre o Email" />
+      </div>
       <div class="filter-group" id="date-filter-group">
         <div class="list-title">Filtrar por Fecha</div>
-        <input type="date" id="filter-date" />
+        <input type="date" id="filter-date-from" />
+        <input type="date" id="filter-date-to" />
       </div>
       <ul class="filter-list" id="status-filters">
         <li class="list-title">Filtrar por Estado</li>
@@ -125,14 +130,22 @@
     <div class="loader-overlay" id="loader"><div class="loader"></div></div>
     <script>
       let allRecords = [];
-    let currentFilters = { status: null, type: 'all', date: null };
+    let currentFilters = { status: null, type: 'all', dateFrom: null, dateTo: null };
     let editingId = null;
     document.addEventListener('DOMContentLoaded', () => { fetchRecords(); setupEventListeners(); });
     function setupEventListeners() {
       document.getElementById('status-filters').addEventListener('click', handleFilterClick);
       document.getElementById('type-filters').addEventListener('click', handleFilterClick);
-      document.getElementById('filter-date').addEventListener('change', e => {
-        currentFilters.date = e.target.value || null;
+      document.getElementById('filter-date-from').addEventListener('change', e => {
+          currentFilters.dateFrom = e.target.value || null;
+          applyFiltersAndRender();
+        });
+        document.getElementById('filter-date-to').addEventListener('change', e => {
+          currentFilters.dateTo = e.target.value || null;
+          applyFiltersAndRender();
+        });
+      document.getElementById('filter-text').addEventListener('input', e => {
+        currentFilters.query = e.target.value.trim().toLowerCase();
         applyFiltersAndRender();
       });
       document.getElementById('add-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'flex');
@@ -166,7 +179,20 @@
       let recs = [...allRecords];
       if (currentFilters.status) recs = recs.filter(r => r.status === currentFilters.status);
       if (currentFilters.type !== 'all') recs = recs.filter(r => r.type === currentFilters.type);
-      if (currentFilters.date) recs = recs.filter(r => r.quoteDate && r.quoteDate.startsWith(currentFilters.date));
+      if (currentFilters.dateFrom || currentFilters.dateTo) {
+          recs = recs.filter(r => {
+            if (!r.quoteDate) return false;
+            return (!currentFilters.dateFrom || r.quoteDate >= currentFilters.dateFrom) &&
+                   (!currentFilters.dateTo || r.quoteDate <= currentFilters.dateTo);
+          });
+        }
+      if (currentFilters.query) {
+        const q = currentFilters.query;
+        recs = recs.filter(r =>
+          (r.clientName && r.clientName.toLowerCase().includes(q)) ||
+          (r.clientEmail && r.clientEmail.toLowerCase().includes(q))
+        );
+      }
       renderRecords(recs);
       document.getElementById('total-records-count').textContent = allRecords.length;
       document.getElementById('paid-records-count').textContent = allRecords.filter(r => r.status === 'Paid').length;

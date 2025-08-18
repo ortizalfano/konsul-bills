@@ -516,6 +516,41 @@ function sendQuote(id) {
 }
 
 // =========================
+// ENVÍO DE FACTURA MANUAL
+// =========================
+function sendInvoice(id) {
+  const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
+  if (!ssId) return { success: false };
+  const ss = SpreadsheetApp.openById(ssId);
+  const sheet = ss.getSheetByName(BILLING_SHEET_NAME);
+  const vals = sheet.getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    if (vals[i][0] === id && vals[i][1] === 'Invoice') {
+      const email = vals[i][6];
+      const name = vals[i][5];
+      const subject = vals[i][7] || 'Factura';
+      GmailApp.sendEmail(
+        email,
+        subject,
+        'Estimado ' + name + ', adjunto tu factura. Monto: $' + vals[i][3]
+      );
+      sheet.getRange(i + 1, 5).setValue('Sent');
+
+      const iSheet = ss.getSheetByName(INVOICES_SHEET_NAME);
+      const iData = iSheet.getDataRange().getValues();
+      for (let j = 1; j < iData.length; j++) {
+        if (iData[j][0] === id) {
+          iSheet.getRange(j + 1, 7).setValue('Sent');
+          break;
+        }
+      }
+      return { success: true };
+    }
+  }
+  return { success: false };
+}
+
+// =========================
 // MARCAR FACTURA PAGADA
 // =========================
 function markInvoicePaid(id) {

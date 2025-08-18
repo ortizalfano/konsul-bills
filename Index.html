@@ -39,6 +39,8 @@
         .filter-group { margin-bottom:20px; }
     .filter-group .list-title { text-transform:uppercase; color:var(--text-light); font-size:0.8em; font-weight:600; margin-bottom:10px; padding-left:10px; }
     .filter-group input { width:100%; padding:8px; border:1px solid var(--border-color); border-radius:8px; }
+    #date-filter-group label { display:block; margin-top:10px; }
+    #date-filter-group input { margin-bottom:10px; }
     .fab { position:absolute; bottom:30px; right:30px; width:56px; height:56px; background:var(--primary-blue); color:#fff; border-radius:50%; border:none; font-size:28px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.2); cursor:pointer; }
     .fab:hover { transform:scale(1.05); }
     .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:1000; }
@@ -74,7 +76,11 @@
       </div>
       <div class="filter-group" id="date-filter-group">
         <div class="list-title">Filtrar por Fecha</div>
+         <label for="filter-date-from">Desde:</label>
+         <br>
         <input type="date" id="filter-date-from" />
+        <label for="filter-date-to">Hasta:</label>
+         <br>
         <input type="date" id="filter-date-to" />
       </div>
       <ul class="filter-list" id="status-filters">
@@ -209,6 +215,9 @@
         if (r.type==='Quote') {
           actions.push(`<button onclick="openEditModal('${r.id}')">✏️ Editar</button>`);
           if (r.status==='Draft') actions.push(`<button onclick="sendQuote('${r.id}')">✉️ Enviar</button>`);
+          } else if (r.type === 'Invoice') {
+          actions.push(`<button onclick="openEditModal('${r.id}')">✏️ Editar</button>`);
+          if (r.status === 'Draft') actions.push(`<button onclick="sendInvoice('${r.id}')">✉️ Enviar</button>`);
         }
         const icon = r.type === 'Quote' ? 'request_quote' : 'receipt_long';
         div.innerHTML = `
@@ -232,6 +241,7 @@
       });
     }
     function sendQuote(id) { showLoader(); google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).sendQuote(id); }
+    function sendInvoice(id) { showLoader(); google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).sendInvoice(id); }
      function openEditModal(id) {
         const rec = allRecords.find(r => r.id===id);
         if (!rec) return;
@@ -253,6 +263,8 @@
         document.getElementById('edit-item').value = rec.item || '';
         document.getElementById('edit-amount').value = rec.amount || '';
         statusSelect.value = statuses.includes(rec.status) ? rec.status : 'Draft';
+        const transformBtn = document.getElementById('transform-to-invoice-btn');
+        transformBtn.style.display = rec.type === 'Invoice' ? 'none' : 'inline-block';
         document.getElementById('edit-quote-modal').style.display = 'flex';
       }
     function saveQuoteEdits() {

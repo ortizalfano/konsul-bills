@@ -178,14 +178,36 @@
           if (!notes) return alert('Introduce detalles');
           showLoader();
           document.getElementById('new-quote-modal').style.display = 'none';
-          google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).createQuoteFromNotes(notes);
+          const timeoutId = startTimeout();
+          google.script.run
+            .withSuccessHandler(() => {
+              clearTimeout(timeoutId);
+              fetchRecords();
+            })
+            .withFailureHandler(err => {
+              clearTimeout(timeoutId);
+              hideLoader();
+              alert(err.message);
+            })
+            .createQuoteFromNotes(notes);
         });
         document.getElementById('create-invoice-btn').addEventListener('click', () => {
           const notes = document.getElementById('invoice-notes-input').value.trim();
           if (!notes) return alert('Introduce detalles');
           showLoader();
           document.getElementById('new-invoice-modal').style.display = 'none';
-          google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).createInvoiceFromNotes(notes);
+          const timeoutId = startTimeout();
+          google.script.run
+            .withSuccessHandler(() => {
+              clearTimeout(timeoutId);
+              fetchRecords();
+            })
+            .withFailureHandler(err => {
+              clearTimeout(timeoutId);
+              hideLoader();
+              alert(err.message);
+            })
+            .createInvoiceFromNotes(notes);
         });
         document.getElementById('save-edit-btn').addEventListener('click', saveQuoteEdits);
         document.getElementById('cancel-edit-btn').addEventListener('click', () => document.getElementById('edit-quote-modal').style.display = 'none');
@@ -193,9 +215,28 @@
       }
     function showLoader() { document.getElementById('loader').style.display = 'flex'; }
     function hideLoader() { document.getElementById('loader').style.display = 'none'; }
+    function startTimeout() {
+      return setTimeout(() => {
+        hideLoader();
+        alert('Error: la solicitud tardó demasiado.');
+      }, 30000);
+    }
     function fetchRecords() {
       showLoader();
-      google.script.run.withSuccessHandler(records => { allRecords = records; applyFiltersAndRender(); hideLoader(); }).withFailureHandler(err => { hideLoader(); alert(err.message); }).getBillingRecords();
+      const timeoutId = startTimeout();
+      google.script.run
+        .withSuccessHandler(records => {
+          clearTimeout(timeoutId);
+          allRecords = records;
+          applyFiltersAndRender();
+          hideLoader();
+        })
+        .withFailureHandler(err => {
+          clearTimeout(timeoutId);
+          hideLoader();
+          alert(err.message);
+        })
+        .getBillingRecords();
     }
     function handleFilterClick(e) {
       const li = e.target.closest('li[data-filter-type]'); if (!li) return;
@@ -268,8 +309,36 @@
         c.appendChild(div);
       });
     }
-    function sendQuote(id) { showLoader(); google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).sendQuote(id); }
-    function sendInvoice(id) { showLoader(); google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).sendInvoice(id); }
+    function sendQuote(id) {
+      showLoader();
+      const timeoutId = startTimeout();
+      google.script.run
+        .withSuccessHandler(() => {
+          clearTimeout(timeoutId);
+          fetchRecords();
+        })
+        .withFailureHandler(err => {
+          clearTimeout(timeoutId);
+          hideLoader();
+          alert(err.message);
+        })
+        .sendQuote(id);
+    }
+    function sendInvoice(id) {
+      showLoader();
+      const timeoutId = startTimeout();
+      google.script.run
+        .withSuccessHandler(() => {
+          clearTimeout(timeoutId);
+          fetchRecords();
+        })
+        .withFailureHandler(err => {
+          clearTimeout(timeoutId);
+          hideLoader();
+          alert(err.message);
+        })
+        .sendInvoice(id);
+    }
      function openEditModal(id) {
         const rec = allRecords.find(r => r.id===id);
         if (!rec) return;
@@ -308,15 +377,35 @@
       };
       showLoader();
       document.getElementById('edit-quote-modal').style.display = 'none';
-      google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).updateQuote(data);
+      const timeoutId = startTimeout();
+      google.script.run
+        .withSuccessHandler(() => {
+          clearTimeout(timeoutId);
+          fetchRecords();
+        })
+        .withFailureHandler(err => {
+          clearTimeout(timeoutId);
+          hideLoader();
+          alert(err.message);
+        })
+        .updateQuote(data);
     }
      function triggerTransform() {
       if (!editingId) return;
       showLoader();
       document.getElementById('edit-quote-modal').style.display = 'none';
+      const timeoutId = startTimeout();
       google.script.run
-        .withSuccessHandler(() => { fetchRecords(); hideLoader(); })
-        .withFailureHandler(err => { hideLoader(); alert(err.message); })
+        .withSuccessHandler(() => {
+          clearTimeout(timeoutId);
+          fetchRecords();
+          hideLoader();
+        })
+        .withFailureHandler(err => {
+          clearTimeout(timeoutId);
+          hideLoader();
+          alert(err.message);
+        })
         .transformQuoteToInvoice(editingId);
     }
   </script>

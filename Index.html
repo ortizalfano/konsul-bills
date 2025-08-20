@@ -113,6 +113,17 @@
       </div>
     </div>
     </div>
+  <div class="modal-overlay" id="new-invoice-modal">
+        <div class="modal-content">
+          <h2>Crear Factura desde Notas</h2>
+          <p>Describe los requerimientos del cliente...</p>
+          <textarea id="invoice-notes-input" placeholder="..."></textarea>
+          <div class="modal-actions">
+            <button class="btn-cancel" id="cancel-invoice-btn">Cancelar</button>
+            <button class="btn-primary" id="create-invoice-btn">Crear Factura</button>
+          </div>
+        </div>
+      </div>
     <div class="modal-overlay" id="edit-quote-modal">
       <div class="modal-content">
         <h2>Editar Cotización</h2>
@@ -159,18 +170,27 @@
         applyFiltersAndRender();
       });
       document.getElementById('add-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'flex');
-      document.getElementById('cancel-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'none');
-      document.getElementById('create-quote-btn').addEventListener('click', () => {
-        const notes = document.getElementById('quote-notes-input').value.trim();
-        if (!notes) return alert('Introduce detalles');
-        showLoader();
-        document.getElementById('new-quote-modal').style.display = 'none';
-        google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).createQuoteFromNotes(notes);
-      });
-      document.getElementById('save-edit-btn').addEventListener('click', saveQuoteEdits);
-      document.getElementById('cancel-edit-btn').addEventListener('click', () => document.getElementById('edit-quote-modal').style.display = 'none');
-      document.getElementById('transform-to-invoice-btn').addEventListener('click', triggerTransform);
-    }
+        document.getElementById('add-invoice-btn').addEventListener('click', () => document.getElementById('new-invoice-modal').style.display = 'flex');
+        document.getElementById('cancel-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'none');
+        document.getElementById('cancel-invoice-btn').addEventListener('click', () => document.getElementById('new-invoice-modal').style.display = 'none');
+        document.getElementById('create-quote-btn').addEventListener('click', () => {
+          const notes = document.getElementById('quote-notes-input').value.trim();
+          if (!notes) return alert('Introduce detalles');
+          showLoader();
+          document.getElementById('new-quote-modal').style.display = 'none';
+          google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).createQuoteFromNotes(notes);
+        });
+        document.getElementById('create-invoice-btn').addEventListener('click', () => {
+          const notes = document.getElementById('invoice-notes-input').value.trim();
+          if (!notes) return alert('Introduce detalles');
+          showLoader();
+          document.getElementById('new-invoice-modal').style.display = 'none';
+          google.script.run.withSuccessHandler(() => fetchRecords()).withFailureHandler(err => { hideLoader(); alert(err.message); }).createInvoiceFromNotes(notes);
+        });
+        document.getElementById('save-edit-btn').addEventListener('click', saveQuoteEdits);
+        document.getElementById('cancel-edit-btn').addEventListener('click', () => document.getElementById('edit-quote-modal').style.display = 'none');
+        document.getElementById('transform-to-invoice-btn').addEventListener('click', triggerTransform);
+      }
     function showLoader() { document.getElementById('loader').style.display = 'flex'; }
     function hideLoader() { document.getElementById('loader').style.display = 'none'; }
     function fetchRecords() {
@@ -186,6 +206,10 @@
       applyFiltersAndRender();
     }
     function applyFiltersAndRender() {
+      const quoteBtn = document.getElementById('add-quote-btn');
+      const invoiceBtn = document.getElementById('add-invoice-btn');
+      quoteBtn.style.display = (currentFilters.type === 'Quote' || currentFilters.type === 'all') ? 'flex' : 'none';
+      invoiceBtn.style.display = (currentFilters.type === 'Invoice' || currentFilters.type === 'all') ? 'flex' : 'none';
       let recs = [...allRecords];
       if (currentFilters.status) recs = recs.filter(r => r.status === currentFilters.status);
       if (currentFilters.type !== 'all') recs = recs.filter(r => r.type === currentFilters.type);

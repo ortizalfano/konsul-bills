@@ -138,7 +138,11 @@
       let allRecords = [];
     let currentFilters = { status: null, type: 'all', dateFrom: null, dateTo: null };
     let editingId = null;
-    document.addEventListener('DOMContentLoaded', () => { fetchRecords(); setupEventListeners(); });
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchRecords();
+      setupEventListeners();
+      setInterval(fetchRecords, 30*60*1000);
+    });
     function setupEventListeners() {
       document.getElementById('status-filters').addEventListener('click', handleFilterClick);
       document.getElementById('type-filters').addEventListener('click', handleFilterClick);

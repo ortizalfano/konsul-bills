@@ -1,42 +1,54 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <base target="_top">
-    <style>
-      body { font-family: Arial, sans-serif; margin: 40px; }
-      .header { text-align: center; margin-bottom: 20px; }
-      .header img { max-height: 80px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-      th, td { border: 1px solid #ddd; padding: 8px; }
-      th { background: #f2f2f2; }
-      .total { text-align: right; }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQImWNgYGD4DwABBAEAaQOK6QAAAABJRU5ErkJggg==" alt="Logo">
-      <h1>Factura #<?= invoiceID ?></h1>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; margin:40px; }
+    .header { display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #0d6efd; padding-bottom:10px; }
+    .logo img { max-height:80px; }
+    .doc-details { text-align:right; }
+    h1 { margin:0; text-transform:uppercase; }
+    table { width:100%; border-collapse:collapse; margin-top:30px; }
+    th, td { border:1px solid #ddd; padding:8px; }
+    th { background:#f2f2f2; text-align:left; }
+    .totals { margin-top:20px; text-align:right; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <? if (logo) { ?><img src="<?= logo ?>" alt="Logo"><? } ?>
     </div>
-    <div class="client">
-      <p><strong>Cliente:</strong> <?= clientEmail ?></p>
-      <p><strong>Fecha de emisión:</strong> <?= dateCreated ?></p>
-      <p><strong>ID de Cotización:</strong> <?= quoteID ?></p>
+    <div class="doc-details">
+      <h1>Factura</h1>
+      <p><strong>Factura #:</strong> <?= invoiceID ?></p>
+      <p><strong>Fecha:</strong> <?= dateCreated ?></p>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Concepto</th>
-          <th>Monto</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><?= item ?></td>
-          <td class="total">$<?= amount ?></td>
-        </tr>
-      </tbody>
-    </table>
-    <p><strong>Asunto:</strong> <?= subject ?></p>
-    <p><strong>Estatus:</strong> <?= status ?></p>
-  </body>
+  </div>
+  <div class="client-info">
+    <p><strong>Cliente:</strong> <?= clientName ?> (<?= clientEmail ?>)</p>
+    <? if (quoteID) { ?><p><strong>Cotización:</strong> <?= quoteID ?></p><? } ?>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Descripción</th>
+        <th>Cantidad</th>
+        <th>Precio Unitario</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><?= item ?></td>
+        <td>1</td>
+        <td><?= amount ?></td>
+        <td><?= amount ?></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="totals">
+    <p><strong>Total:</strong> <?= amount ?></p>
+  </div>
+</body>
 </html>

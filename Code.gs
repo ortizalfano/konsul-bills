@@ -24,13 +24,27 @@ function initialSetup() {
   const props = PropertiesService.getUserProperties();
   let ssId = props.getProperty('spreadsheetId');
   if (ssId) {
-    try { SpreadsheetApp.openById(ssId); return; }
+    try { SpreadsheetApp.openById(ssId); }
     catch(e) { ssId = null; }
   }
-  // Crear nueva hoja
-  const ss = SpreadsheetApp.create('Kônsul - Datos de Facturación');
-  props.setProperty('spreadsheetId', ss.getId());
-  ensureSheets_();
+  if (!ssId) {
+    const ss = SpreadsheetApp.create('Kônsul - Datos de Facturación');
+    props.setProperty('spreadsheetId', ss.getId());
+    ensureSheets_();
+  }
+  const triggers = ScriptApp.getProjectTriggers();
+  const hasTrigger = triggers.some(t =>
+    t.getHandlerFunction() === 'processGmailMessages' &&
+    t.getTriggerSource() === ScriptApp.TriggerSource.CLOCK
+  );
+  if (!hasTrigger) setupTriggers();
+}
+
+function setupTriggers() {
+  ScriptApp.newTrigger('processGmailMessages')
+    .timeBased()
+    .everyMinutes(30)
+    .create();
 }
 
 function ensureSheets_() {
@@ -148,6 +162,41 @@ function ensureSheets_() {
     }
   }
 }
+
+function ensureDriveFolders() {
+  const props = PropertiesService.getUserProperties();
+
+  const getOrCreate = (propName, names) => {
+    let id = props.getProperty(propName);
+    if (id) {
+      try {
+        DriveApp.getFolderById(id);
+        return id;
+      } catch (e) {
+        id = null;
+      }
+    }
+    let folder = null;
+    for (const name of names) {
+      const it = DriveApp.getFoldersByName(name);
+      if (it.hasNext()) {
+        folder = it.next();
+        break;
+      }
+    }
+    if (!folder) {
+      folder = DriveApp.createFolder(names[0]);
+    }
+    id = folder.getId();
+    props.setProperty(propName, id);
+    return id;
+  };
+
+  const quotesFolderId = getOrCreate('quotesFolderId', ['Cotizaciones', 'Quotes']);
+  const invoicesFolderId = getOrCreate('invoicesFolderId', ['Facturas', 'Invoices']);
+  return { quotesFolderId, invoicesFolderId };
+}
+
 
 // =========================
 // ENTRY POINT WEB APP
@@ -378,6 +427,172 @@ function createQuoteFromNotes(notes) {
   return { success: true, quoteID: quoteID, ...fields };
 }
 
+function createInvoiceFromNotes(notes) {
+  Logger.log('Iniciando creación de factura desde notas');
+  if (typeof notes !== 'string' || notes.trim() === '') {
+    Logger.log('Notas vacías o no provistas');
+    return { success: false, error: 'Notas vacías' };
+  }
+  const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
+  if (!ssId) return { success: false };
+  ensureSheets_();
+
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) throw new Error('GEMINI_API_KEY no configurada');
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=' + apiKey;
+  const prompt =
+    'Eres un asistente que extrae datos de factura. ' +
+    'Del texto proporcionado, devuelve EXACTAMENTE un JSON con esta estructura:\n' +
+    '{"clientName":"","clientEmail":"","subject":"","date":"","item":"","amount":0}\n' +
+    'Texto:\n"""' + notes + '"""';
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    muteHttpExceptions: true
+  };
+
+  Logger.log('Enviando petición a Gemini');
+  const response = UrlFetchApp.fetch(url, options);
+  const status = response.getResponseCode();
+  Logger.log('Código de respuesta: ' + status);
+  if (status !== 200) {
+    Logger.log('Error en llamada a Gemini: ' + response.getContentText());
+    return { success: false, error: 'Error en API Gemini', status: status };
+  }
+
+  const textResponse = response.getContentText();
+  Logger.log('Gemini raw response: ' + textResponse);
+
+  let parsed = {};
+  try {
+    const candidate = JSON.parse(textResponse).candidates[0].content.parts[0].text || '';
+    Logger.log('Gemini candidate: ' + candidate);
+    let cleaned = candidate.replace(/```json|```/gi, '').trim();
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (err) {
+      Logger.log('Error parseando candidato, intentando limpiar: ' + err);
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start >= 0 && end >= 0) {
+        const sub = cleaned.substring(start, end + 1);
+        try { parsed = JSON.parse(sub); }
+        catch (err2) { Logger.log('Fallback parse fallido: ' + err2); }
+      }
+    }
+
+  } catch (e) {
+    Logger.log('Error general parsing Gemini output: ' + e);
+  }
+
+  const fields = { clientName: '', clientEmail: '', subject: '', date: '', item: '', amount: 0 };
+  Object.keys(fields).forEach(k => {
+    const v = parsed[k];
+    if (k === 'amount') {
+      if (typeof v === 'number') fields[k] = v;
+    } else if (typeof v === 'string') {
+      fields[k] = v;
+    }
+  });
+
+  if (!fields.clientEmail) {
+    const m = notes.match(/[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+    if (m) fields.clientEmail = m[0];
+  }
+  if (!fields.amount) {
+    const m = notes.match(/\d+(?:[.,]\d+)?/);
+    if (m) fields.amount = parseFloat(m[0].replace(',', '.'));
+  }
+  if (!fields.date) {
+    const m = notes.match(/\d{4}-\d{2}-\d{2}/) || notes.match(/\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}/);
+    if (m) fields.date = m[0];
+  }
+  if (!fields.clientName) {
+    const m = notes.match(/(?:client|cliente)[:\s]+([\w\s]+)/i);
+    if (m) fields.clientName = m[1].trim();
+  }
+  if (!fields.subject) {
+    const m = notes.match(/(?:subject|asunto)[:\s]+(.+)/i);
+    fields.subject = m ? m[1].split('\n')[0].trim() : notes.split('\n')[0].trim();
+  }
+  if (!fields.item) {
+    const m = notes.match(/(?:item|concepto|producto)[:\s]+(.+)/i);
+    if (m) fields.item = m[1].split('\n')[0].trim();
+  }
+
+  if (!fields.clientName)  fields.clientName  = 'Por Actualizar';
+  if (!fields.clientEmail) fields.clientEmail = 'N/A';
+
+  fields.amount = parseFloat(fields.amount) || 0;
+  let invoiceDate = new Date(fields.date);
+  if (isNaN(invoiceDate.getTime())) invoiceDate = new Date();
+
+  Object.keys(fields).forEach(k => {
+    if (fields[k] === '' || fields[k] === 0) Logger.log('Campo faltante o vacío: ' + k);
+  });
+
+  const ss = SpreadsheetApp.openById(ssId);
+
+  // Guardar en Invoices
+  const sheetI = ss.getSheetByName(INVOICES_SHEET_NAME);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    return { success: false, error: 'No se pudo generar ID' };
+  }
+  let invoiceID;
+  try {
+    const last = sheetI.getRange(sheetI.getLastRow(), 1).getValue();
+    const next = (parseInt(String(last).replace('INV', '')) + 1 || 1)
+      .toString()
+      .padStart(3, '0');
+    invoiceID = 'INV' + next;
+  } finally {
+    lock.releaseLock();
+  }
+  sheetI.appendRow([
+    invoiceID,
+    '',
+    fields.clientEmail,
+    fields.subject,
+    fields.item,
+    fields.amount,
+    'Draft',
+    invoiceDate,
+    new Date()
+  ]);
+
+  // Guardar en Billing (para UI)
+  const sheetB = ss.getSheetByName(BILLING_SHEET_NAME);
+  const desc = fields.item || fields.subject;
+  sheetB.appendRow([
+    invoiceID,
+    'Invoice',
+    desc,
+    fields.amount,
+    'Draft',
+    fields.clientName,
+    fields.clientEmail,
+    fields.subject
+  ]);
+
+  // Generar PDF opcional y mover a carpeta si existe
+  try {
+    const file = generateInvoicePdf(invoiceID);
+    const folderId = PropertiesService.getScriptProperties().getProperty('INVOICES_FOLDER_ID');
+    if (folderId && file) {
+      DriveApp.getFolderById(folderId).addFile(file);
+    }
+  } catch (err) {
+    Logger.log('Error generando PDF: ' + err);
+  }
+
+  Logger.log('Factura creada con ID: ' + invoiceID);
+  return { success: true, invoiceID: invoiceID, ...fields };
+}
+
 // =========================
 // ACTUALIZAR COTIZACIÓN
 // =========================
@@ -599,6 +814,31 @@ function generateInvoicePdf(invoiceId) {
   return DriveApp.createFile(blob); // o devolver blob si se prefiere
 }
 
+// =========================
+// PROCESAR MENSAJES GMAIL
+// =========================
+function processGmailMessages() {
+  const labelNames = ['Cotizaciones', 'Quotes', 'Facturas', 'Invoices'];
+  const processedLabel = GmailApp.getUserLabelByName('Processed') || GmailApp.createLabel('Processed');
+  labelNames.forEach(name => {
+    const label = GmailApp.getUserLabelByName(name);
+    if (!label) return;
+    const threads = label.getUnreadThreads();
+    threads.forEach(thread => {
+      const messages = thread.getMessages();
+      if (!messages.length) return;
+      const body = messages[0].getBody();
+      if (name === 'Cotizaciones' || name === 'Quotes') {
+        createQuoteFromEmail(body);
+      } else if (name === 'Facturas' || name === 'Invoices') {
+        createInvoiceFromEmail(body);
+      }
+      thread.markRead();
+      thread.addLabel(processedLabel);
+      thread.removeLabel(label);
+    });
+  });
+}
 
 // =========================
 // SEGUIMIENTO AUTOMÁTICO
@@ -659,4 +899,27 @@ function followUpQuotesAndInvoices() {
         }
       });
   }
+}
+
+function processGmailMessages() {
+  const labelName = 'konsul-billing';
+  const threads = GmailApp.search('label:' + labelName + ' is:unread');
+  const processedLabel = GmailApp.getUserLabelByName(labelName + '-processed') || GmailApp.createLabel(labelName + '-processed');
+
+  threads.forEach(thread => {
+    thread.getMessages().forEach(msg => {
+      if (!msg.isUnread()) return;
+      const body = msg.getPlainBody();
+      const subject = msg.getSubject().toLowerCase();
+      let res;
+      if (subject.includes('invoice') || subject.includes('factura')) {
+        res = createInvoiceFromNotes(body);
+      } else {
+        res = createQuoteFromNotes(body);
+      }
+      msg.markRead();
+      processedLabel.addToThread(thread);
+      Logger.log('Processed email with result: ' + JSON.stringify(res));
+    });
+  });
 }

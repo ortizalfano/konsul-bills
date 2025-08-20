@@ -243,8 +243,30 @@ function getBillingRecords() {
     };
   }
 
+   // Build a map of invoice details to enrich billing records
+  const invoicesSheet = ss.getSheetByName(INVOICES_SHEET_NAME);
+  const invoicesData = invoicesSheet ? invoicesSheet.getDataRange().getValues() : [];
+  const invoiceHeaders = invoicesData[0] || [];
+  const iIdIdx = invoiceHeaders.indexOf('invoiceID');
+  const iSubjectIdx = invoiceHeaders.indexOf('subject');
+  const iItemIdx = invoiceHeaders.indexOf('item');
+  const iDateIdx = invoiceHeaders.indexOf('quoteDate');
+
+  const invoiceMap = {};
+  for (let i = 1; i < invoicesData.length; i++) {
+    const row = invoicesData[i];
+    const id = iIdIdx >= 0 ? row[iIdIdx] : null;
+    if (!id) continue;
+    invoiceMap[id] = {
+      subject: iSubjectIdx >= 0 ? row[iSubjectIdx] : '',
+      item: iItemIdx >= 0 ? row[iItemIdx] : '',
+      quoteDate: iDateIdx >= 0 ? row[iDateIdx] : null
+    };
+  }
+
+
   return billingRows.slice(1).map(r => {
-    const details = quoteMap[r[0]] || {};
+    const details = r[1] === 'Quote' ? quoteMap[r[0]] : invoiceMap[r[0]] || {};
     let status = r[4];
     if (r[1] === 'Quote') {
       if (!QUOTE_STATUSES.includes(status)) status = 'Draft';
@@ -260,7 +282,7 @@ function getBillingRecords() {
       clientName: r[5],
       clientEmail: r[6],
       subject: details.subject || '',
-      item: details.item || '',
+      item: details.item || r[2],
       quoteDate: details.quoteDate ? Utilities.formatDate(new Date(details.quoteDate), Session.getScriptTimeZone(), 'yyyy-MM-dd') : ''
     };
   });
@@ -366,6 +388,7 @@ function createQuoteFromNotes(notes) {
     if (m) fields.item = m[1].split('\n')[0].trim();
   }
 
+  if (!fields.item) fields.item = fields.subject || '';
   if (!fields.clientName)  fields.clientName  = 'Por Actualizar';
   if (!fields.clientEmail) fields.clientEmail = 'N/A';
 
@@ -523,8 +546,29 @@ function createInvoiceFromNotes(notes) {
     const m = notes.match(/(?:item|concepto|producto)[:\s]+(.+)/i);
     if (m) fields.item = m[1].split('\n')[0].trim();
   }
+  
+  if (!fields.item) fields.item = fields.subject || '';
 
-  if (!fields.clientName)  fields.clientName  = 'Por Actualizar';
+   if (!fields.item) {
+    const summaryPrompt = 'Resume en una sola frase el requerimiento del cliente:\n"""' + notes + '"""';
+    const summaryResp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ contents: [{ parts: [{ text: summaryPrompt }] }] }),
+      muteHttpExceptions: true
+    });
+    if (summaryResp.getResponseCode() === 200) {
+      try {
+        const candidate = JSON.parse(summaryResp.getContentText()).candidates[0].content.parts[0].text || '';
+        fields.item = candidate.replace(/\n+/g, ' ').trim();
+      } catch (e) {
+        Logger.log('Error al obtener resumen: ' + e);
+      }
+    }
+  }
+  if (!fields.item) fields.item = fields.subject || 'N/A';
+
+  if (!fields.clientName)  fields.clientName  = 'N/A';
   if (!fields.clientEmail) fields.clientEmail = 'N/A';
 
   fields.amount = parseFloat(fields.amount) || 0;

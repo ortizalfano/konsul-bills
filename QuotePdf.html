@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; margin:40px; }
+    .header { display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #0d6efd; padding-bottom:10px; }
+    .logo img { max-height:80px; }
+    .doc-details { text-align:right; }
+    h1 { margin:0; text-transform:uppercase; }
+    table { width:100%; border-collapse:collapse; margin-top:30px; }
+    th, td { border:1px solid #ddd; padding:8px; }
+    th { background:#f2f2f2; text-align:left; }
+    .totals { margin-top:20px; text-align:right; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <? if (logo) { ?><img src="<?= logo ?>" alt="Logo"><? } ?>
+    </div>
+    <div class="doc-details">
+      <h1>Cotización</h1>
+      <p><strong>Cotización #:</strong> <?= quoteID ?></p>
+      <p><strong>Fecha:</strong> <?= quoteDate ?></p>
+    </div>
+  </div>
+  <div class="client-info">
+    <p><strong>Cliente:</strong> <?= clientName ?> (<?= clientEmail ?>)</p>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Descripción</th>
+        <th>Cantidad</th>
+        <th>Precio Unitario</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><?= item ?></td>
+        <td>1</td>
+        <td><?= amount ?></td>
+        <td><?= amount ?></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="totals">
+    <p><strong>Total:</strong> <?= amount ?></p>
+  </div>
+</body>
+</html>

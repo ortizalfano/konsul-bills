@@ -7,6 +7,7 @@
  * @Scope https://www.googleapis.com/auth/script.external_request
  * @Scope https://www.googleapis.com/auth/userinfo.email
  * @Scope https://www.googleapis.com/auth/script.scriptapp
+ * @Scope https://www.googleapis.com/auth/userinfo.profile
  */
 
 // Constantes de nombres de hoja
@@ -198,6 +199,44 @@ function ensureDriveFolders() {
   return { quotesFolderId, invoicesFolderId };
 }
 
+// =========================
+// LOGO MANAGEMENT
+// =========================
+function setLogo(fileId) {
+  PropertiesService.getUserProperties().setProperty('logoFileId', fileId);
+  return { success: true };
+}
+
+function getLogo_() {
+  const props = PropertiesService.getUserProperties();
+  const fileId = props.getProperty('logoFileId');
+  let bytes = null;
+  if (fileId) {
+    try {
+      bytes = DriveApp.getFileById(fileId).getBlob().getBytes();
+    } catch (e) {
+      Logger.log('Error reading logo file: ' + e);
+    }
+  }
+  if (!bytes) {
+    try {
+      const token = ScriptApp.getOAuthToken();
+      const resp = UrlFetchApp.fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json', {
+        headers: { Authorization: 'Bearer ' + token },
+        muteHttpExceptions: true
+      });
+      if (resp.getResponseCode() === 200) {
+        const picUrl = JSON.parse(resp.getContentText()).picture;
+        if (picUrl) {
+          bytes = UrlFetchApp.fetch(picUrl).getBlob().getBytes();
+        }
+      }
+    } catch (e) {
+      Logger.log('No se pudo obtener foto de usuario: ' + e);
+    }
+  }
+  return bytes ? 'data:image/png;base64,' + Utilities.base64Encode(bytes) : '';
+}
 
 // =========================
 // ENTRY POINT WEB APP
@@ -625,11 +664,7 @@ function createInvoiceFromNotes(notes) {
 
   // Generar PDF opcional y mover a carpeta si existe
   try {
-    const file = generateInvoicePdf(invoiceID);
-    const folderId = PropertiesService.getScriptProperties().getProperty('INVOICES_FOLDER_ID');
-    if (folderId && file) {
-      DriveApp.getFolderById(folderId).addFile(file);
-    }
+    generateInvoicePdf(invoiceID);
   } catch (err) {
     Logger.log('Error generando PDF: ' + err);
   }
@@ -852,11 +887,35 @@ function generateInvoicePdf(invoiceId) {
 
   const tmpl = HtmlService.createTemplateFromFile('InvoicePdf');
   headers.forEach((h, i) => tmpl[h] = row[i]);
+  tmpl.logo = getLogo_();
   const html = tmpl.evaluate().getContent();
   const blob = Utilities.newBlob(html, 'text/html')
     .getAs('application/pdf')
     .setName(invoiceId + '.pdf');
-  return DriveApp.createFile(blob); // o devolver blob si se prefiere
+  const folderId = ensureDriveFolders().invoicesFolderId;
+  const file = DriveApp.getFolderById(folderId).createFile(blob);
+  return { url: file.getUrl() };
+}
+
+function generateQuotePdf(quoteId) {
+  const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
+  const ss    = SpreadsheetApp.openById(ssId);
+  const sheet = ss.getSheetByName(QUOTES_SHEET_NAME);
+  const data  = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const row = data.find(r => r[0] === quoteId);
+  if (!row) return null;
+
+  const tmpl = HtmlService.createTemplateFromFile('QuotePdf');
+  headers.forEach((h, i) => tmpl[h] = row[i]);
+  tmpl.logo = getLogo_();
+  const html = tmpl.evaluate().getContent();
+  const blob = Utilities.newBlob(html, 'text/html')
+    .getAs('application/pdf')
+    .setName(quoteId + '.pdf');
+  const folderId = ensureDriveFolders().quotesFolderId;
+  const file = DriveApp.getFolderById(folderId).createFile(blob);
+  return { url: file.getUrl() };
 }
 
 // =========================

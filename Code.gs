@@ -6,6 +6,7 @@
  * @Scope https://www.googleapis.com/auth/gmail.modify
  * @Scope https://www.googleapis.com/auth/script.external_request
  * @Scope https://www.googleapis.com/auth/userinfo.email
+ * @Scope https://www.googleapis.com/auth/script.scriptapp
  */
 
 // Constantes de nombres de hoja

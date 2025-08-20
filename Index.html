@@ -102,6 +102,7 @@
     </main>
   </div>
   <button class="fab" id="add-quote-btn">+</button>
+  <button class="fab" id="add-invoice-btn">+</button>
    <div class="modal-overlay" id="new-quote-modal">
       <div class="modal-content">
         <h2>Crear Cotización desde Notas</h2>
@@ -116,8 +117,8 @@
   <div class="modal-overlay" id="new-invoice-modal">
         <div class="modal-content">
           <h2>Crear Factura desde Notas</h2>
-          <p>Describe los requerimientos del cliente...</p>
-          <textarea id="invoice-notes-input" placeholder="..."></textarea>
+          <p>Describe los requerimientos del cliente. Recuerda mencionar el cliente y el monto estimado. La IA generará una descripción, item y monto</p>
+          <textarea id="invoice-notes-input" placeholder="Ej: El cliente 'Juan Gonzalez'  necesita una pagina web con integración de pasarela de pago, el costo es de 1500 euros, el correo del cliente es juangonzalez@ejemplo.com"></textarea>
           <div class="modal-actions">
             <button class="btn-cancel" id="cancel-invoice-btn">Cancelar</button>
             <button class="btn-primary" id="create-invoice-btn">Crear Factura</button>
@@ -126,7 +127,7 @@
       </div>
     <div class="modal-overlay" id="edit-quote-modal">
       <div class="modal-content">
-        <h2>Editar Cotización</h2>
+        <h2 id="edit-modal-title"></h2>
         <div class="modal-field"><label>Cliente</label><input type="text" id="edit-client-name"></div>
         <div class="modal-field"><label>Email</label><input type="email" id="edit-client-email"></div>
         <div class="modal-field"><label>Asunto</label><input type="text" id="edit-subject"></div>
@@ -169,10 +170,16 @@
         currentFilters.query = e.target.value.trim().toLowerCase();
         applyFiltersAndRender();
       });
-      document.getElementById('add-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'flex');
-        document.getElementById('add-invoice-btn').addEventListener('click', () => document.getElementById('new-invoice-modal').style.display = 'flex');
-        document.getElementById('cancel-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'none');
-        document.getElementById('cancel-invoice-btn').addEventListener('click', () => document.getElementById('new-invoice-modal').style.display = 'none');
+      const quoteBtn = document.getElementById('add-quote-btn');
+      if (quoteBtn) {
+        quoteBtn.addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'flex');
+      }
+      const invoiceBtn = document.getElementById('add-invoice-btn');
+      if (invoiceBtn) {
+        invoiceBtn.addEventListener('click', () => document.getElementById('new-invoice-modal').style.display = 'flex');
+      }
+      document.getElementById('cancel-quote-btn').addEventListener('click', () => document.getElementById('new-quote-modal').style.display = 'none');
+      document.getElementById('cancel-invoice-btn').addEventListener('click', () => document.getElementById('new-invoice-modal').style.display = 'none');
         document.getElementById('create-quote-btn').addEventListener('click', () => {
           const notes = document.getElementById('quote-notes-input').value.trim();
           if (!notes) return alert('Introduce detalles');
@@ -249,8 +256,12 @@
     function applyFiltersAndRender() {
       const quoteBtn = document.getElementById('add-quote-btn');
       const invoiceBtn = document.getElementById('add-invoice-btn');
-      quoteBtn.style.display = (currentFilters.type === 'Quote' || currentFilters.type === 'all') ? 'flex' : 'none';
-      invoiceBtn.style.display = (currentFilters.type === 'Invoice' || currentFilters.type === 'all') ? 'flex' : 'none';
+      if (quoteBtn) {
+        quoteBtn.style.display = (currentFilters.type === 'Quote' || currentFilters.type === 'all') ? 'flex' : 'none';
+      }
+      if (invoiceBtn) {
+        invoiceBtn.style.display = (currentFilters.type === 'Invoice' || currentFilters.type === 'all') ? 'flex' : 'none';
+      }
       let recs = [...allRecords];
       if (currentFilters.status) recs = recs.filter(r => r.status === currentFilters.status);
       if (currentFilters.type !== 'all') recs = recs.filter(r => r.type === currentFilters.type);
@@ -296,7 +307,7 @@
             <div class="record-details">
               
               <span><strong>ID:</strong> ${r.id}</span>
-               <span><strong>Cliente:</strong> ${r.clientName || 'Por Actualizar'}</span>
+               <span><strong>Cliente:</strong> ${r.clientName || 'N/A'}</span>
               <span><strong>Email:</strong> ${r.clientEmail || 'N/A'}</span>
               ${r.quoteDate ? `<span><strong>Fecha:</strong> ${r.quoteDate}</span>` : ''}
               <span><strong>Monto:</strong> $${r.amount}</span>
@@ -342,6 +353,10 @@
      function openEditModal(id) {
         const rec = allRecords.find(r => r.id===id);
         if (!rec) return;
+        const title = document.getElementById('edit-modal-title');
+        title.textContent = rec.type === 'Invoice'
+            ? 'Editar Factura'
+            : 'Editar Cotización';
         editingId = id;
         const statusSelect = document.getElementById('edit-status');
         statusSelect.innerHTML = '';
@@ -357,7 +372,7 @@
         document.getElementById('edit-client-name').value = rec.clientName || '';
         document.getElementById('edit-client-email').value = rec.clientEmail || '';
         document.getElementById('edit-subject').value = rec.subject || '';
-        document.getElementById('edit-item').value = rec.item || '';
+        document.getElementById('edit-item').value = rec.item || rec.description || '';
         document.getElementById('edit-amount').value = rec.amount || '';
         statusSelect.value = statuses.includes(rec.status) ? rec.status : 'Draft';
         const transformBtn = document.getElementById('transform-to-invoice-btn');

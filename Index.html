@@ -31,8 +31,8 @@
     .record-item { display:flex; align-items:center; padding:15px 10px; border-bottom:1px solid var(--border-color); }
     .record-item-main { flex:1; margin-left:15px; }
     .record-description { font-weight:500; }
-    .record-details { font-size:0.85em; color:var(--text-light); display:flex; gap:15px; margin-top:5px; }
-    .status-tag { padding:3px 8px; border-radius:12px; font-size:0.75em; font-weight:600; color:var(--white); margin-right:8px; }
+    .record-details { font-size:0.85em; color:var(--text-light); display:flex; gap:15px; margin-top:5px; align-items:center; }
+    .status-tag { display:inline-block; padding:3px 8px; border-radius:12px; font-size:0.75em; font-weight:600; color:var(--white); }
     .status-Draft { background:var(--text-light); } .status-Sent { background:var(--priority-medium); } .status-Cancelled { background:var(--priority-high); } .status-Paid { background:var(--priority-paid); }
     .record-actions button { background:none; border:1px solid var(--border-color); padding:5px 12px; border-radius:6px; cursor:pointer; transition:all 0.2s; font-weight:500; }
     .record-actions button:hover { background:var(--bg-light); }
@@ -83,11 +83,11 @@
          <br>
         <input type="date" id="filter-date-to" />
       </div>
-      <ul class="filter-list" id="status-filters">
-        <li class="list-title">Filtrar por Estado</li>
-        <li data-filter-type="status" data-filter-value="Cancelled"><span class="icon-dot" style="background-color:var(--priority-high)"></span>Prioridad Alta (Cancelado)</li>
-        <li data-filter-type="status" data-filter-value="Sent"><span class="icon-dot" style="background-color:var(--priority-medium)"></span>Prioridad Media (Enviado)</li>
-        <li data-filter-type="status" data-filter-value="Paid"><span class="icon-dot" style="background-color:var(--priority-paid)"></span>Completado (Pagado)</li>
+      <ul class="filter-list" id="priority-filters">
+        <li class="list-title">Filtrar por Prioridad</li>
+        <li data-filter-type="priority" data-filter-value="High"><span class="icon-dot" style="background-color:var(--priority-high)"></span>Alta</li>
+        <li data-filter-type="priority" data-filter-value="Medium"><span class="icon-dot" style="background-color:var(--priority-medium)"></span>Media</li>
+        <li data-filter-type="priority" data-filter-value="Low"><span class="icon-dot" style="background-color:var(--priority-low)"></span>Baja</li>
       </ul>
       <ul class="filter-list" id="type-filters">
         <li class="list-title">Filtros por Tipo</li>
@@ -133,8 +133,12 @@
         <div class="modal-field"><label>Asunto</label><input type="text" id="edit-subject"></div>
         <div class="modal-field"><label>Item</label><input type="text" id="edit-item"></div>
         <div class="modal-field"><label>Monto</label><input type="number" id="edit-amount"></div>
-        <div class="modal-field"><label>Estado</label>
-         <select id="edit-status"></select>
+       <div class="modal-field"><label>Prioridad</label>
+         <select id="edit-priority">
+           <option value="High">Alta</option>
+           <option value="Medium" selected>Media</option>
+           <option value="Low">Baja</option>
+         </select>
         </div>
         <div class="modal-actions">
           <button class="btn-cancel" id="cancel-edit-btn">Cancelar</button>
@@ -148,7 +152,7 @@
     <div class="loader-overlay" id="loader"><div class="loader"></div></div>
     <script>
       let allRecords = [];
-    let currentFilters = { status: null, type: 'all', dateFrom: null, dateTo: null };
+    let currentFilters = { priority: null, type: 'all', dateFrom: null, dateTo: null, query: null };
     let editingId = null;
     document.addEventListener('DOMContentLoaded', () => {
       fetchRecords();
@@ -156,7 +160,7 @@
       setInterval(fetchRecords, 30*60*1000);
     });
     function setupEventListeners() {
-      document.getElementById('status-filters').addEventListener('click', handleFilterClick);
+      document.getElementById('priority-filters').addEventListener('click', handleFilterClick);
       document.getElementById('type-filters').addEventListener('click', handleFilterClick);
       document.getElementById('filter-date-from').addEventListener('change', e => {
           currentFilters.dateFrom = e.target.value || null;
@@ -248,8 +252,8 @@
     function handleFilterClick(e) {
       const li = e.target.closest('li[data-filter-type]'); if (!li) return;
       const type = li.dataset.filterType, value = li.dataset.filterValue;
-      if (type === 'status') currentFilters.status = currentFilters.status === value ? null : value;
-      else currentFilters.type = value;
+      if (type === 'priority') currentFilters.priority = currentFilters.priority === value ? null : value;
+      else if (type === 'type') currentFilters.type = value;
       document.querySelectorAll(`#${type}-filters li`).forEach(x => x.classList.toggle('active', x.dataset.filterValue === currentFilters[type]));
       applyFiltersAndRender();
     }
@@ -263,7 +267,7 @@
         invoiceBtn.style.display = (currentFilters.type === 'Invoice' || currentFilters.type === 'all') ? 'flex' : 'none';
       }
       let recs = [...allRecords];
-      if (currentFilters.status) recs = recs.filter(r => r.status === currentFilters.status);
+      if (currentFilters.priority) recs = recs.filter(r => r.priority === currentFilters.priority);
       if (currentFilters.type !== 'all') recs = recs.filter(r => r.type === currentFilters.type);
       if (currentFilters.dateFrom || currentFilters.dateTo) {
           recs = recs.filter(r => {
@@ -311,10 +315,10 @@
               <span><strong>Email:</strong> ${r.clientEmail || 'N/A'}</span>
               ${r.quoteDate ? `<span><strong>Fecha:</strong> ${r.quoteDate}</span>` : ''}
               <span><strong>Monto:</strong> $${r.amount}</span>
-              
+               ${r.priority ? `<span><strong>Prioridad:</strong> ${r.priority}</span>` : ''}
+              <div class="status-tag status-${r.status}">${r.status}</div>
             </div>
           </div>
-           <div class="status-tag status-${r.status}">${r.status}</div>
          <div class="record-actions">${actions.join(' ')}</div>
         `;
         c.appendChild(div);
@@ -375,6 +379,7 @@
         document.getElementById('edit-item').value = rec.item || rec.description || '';
         document.getElementById('edit-amount').value = rec.amount || '';
         statusSelect.value = statuses.includes(rec.status) ? rec.status : 'Draft';
+        document.getElementById('edit-priority').value = rec.priority || 'Medium';
         const transformBtn = document.getElementById('transform-to-invoice-btn');
         transformBtn.style.display = rec.type === 'Invoice' ? 'none' : 'inline-block';
         document.getElementById('edit-quote-modal').style.display = 'flex';
@@ -388,7 +393,8 @@
         subject: document.getElementById('edit-subject').value.trim(),
         item: document.getElementById('edit-item').value.trim(),
         amount: parseFloat(document.getElementById('edit-amount').value) || 0,
-        status: document.getElementById('edit-status').value
+        status: document.getElementById('edit-status').value,
+        priority: document.getElementById('edit-priority').value
       };
       showLoader();
       document.getElementById('edit-quote-modal').style.display = 'none';

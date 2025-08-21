@@ -41,8 +41,10 @@
     .filter-group input { width:100%; padding:8px; border:1px solid var(--border-color); border-radius:8px; }
     #date-filter-group label { display:block; margin-top:10px; }
     #date-filter-group input { margin-bottom:10px; }
-    .fab { position:absolute; bottom:30px; right:30px; width:56px; height:56px; background:var(--primary-blue); color:#fff; border-radius:50%; border:none; font-size:28px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.2); cursor:pointer; }
+    .fab { position:fixed; bottom:30px; right:30px; width:56px; height:56px; background:var(--primary-blue); color:#fff; border-radius:50%; border:none; font-size:28px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.2); cursor:pointer; z-index:1000; }
     .fab:hover { transform:scale(1.05); }
+    #add-quote-btn { right:100px; }
+    #add-invoice-btn { right:30px; }
     .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:1000; }
     .modal-content { background:var(--white); padding:30px; border-radius:12px; width:90%; max-width:500px; box-shadow:0 5px 15px rgba(0,0,0,0.3); }
     .modal-content h2 { margin-bottom:20px; }

@@ -53,8 +53,8 @@ function ensureSheets_() {
   const ssId = PropertiesService.getUserProperties().getProperty('spreadsheetId');
   if (!ssId) return;
   const ss = SpreadsheetApp.openById(ssId);
-  const QUOTES_HEADERS   = ['quoteID','clientName','clientEmail','subject','item','total','status','quoteDate','invoiceID','threadId'];
-  const INVOICES_HEADERS = ['invoiceID','quoteID','clientEmail','subject','item','amount','status','quoteDate','dateCreated'];
+  const QUOTES_HEADERS   = ['quoteID','clientName','clientEmail','subject','item','total','status','priority','quoteDate','invoiceID','threadId'];
+  const INVOICES_HEADERS = ['invoiceID','quoteID','clientEmail','subject','item','amount','status','priority','quoteDate','dateCreated'];
 
   let sheet = ss.getSheetByName(QUOTES_SHEET_NAME);
   if (!sheet) {
@@ -77,6 +77,7 @@ function ensureSheets_() {
           r[2], // item desde description
           r[3], // total
           r[4], // status
+          'Medium',
           r[5], // quoteDate desde dateCreated
           r[6] || '',
           r[7] || ''
@@ -85,14 +86,15 @@ function ensureSheets_() {
         newData = data.map(r => [
           r[0] || '',
           r[1] || '',
-          '',
           r[2] || '',
           r[3] || '',
           r[4] || '',
           r[5] || '',
           r[6] || '',
+           'Medium',
           r[7] || '',
-          r[8] || ''
+          r[8] || '',
+          r[9] || ''
         ]);
       }
       sheet.clear();
@@ -122,12 +124,13 @@ function ensureSheets_() {
           '',   // item
           r[3], // amount
           r[4], // status
+          'Medium',
           '',   // quoteDate
           r[5]  // dateCreated
         ]);
       } else {
           newData = data.map(r => [
-            r[0] || '', r[1] || '', r[2] || '', r[3] || '', r[4] || '', r[5] || '', r[6] || '', r[7] || '', r[8] || ''
+             r[0] || '', r[1] || '', r[2] || '', r[3] || '', r[4] || '', r[5] || '', r[6] || '', 'Medium', r[7] || '', r[8] || ''
           ]);
       }
       sheet.clear();
@@ -139,13 +142,22 @@ function ensureSheets_() {
 
   if (!ss.getSheetByName(BILLING_SHEET_NAME)) {
     ss.insertSheet(BILLING_SHEET_NAME)
-      .getRange('A1:H1')
+      .getRange('A1:I1')
       .setValues([[
-         'id','type','description','amount','status','clientName','clientEmail','subject'
+         'id','type','description','amount','status','priority','clientName','clientEmail','subject'
       ]]);
        } else {
     const sheetB = ss.getSheetByName(BILLING_SHEET_NAME);
-    const headers = sheetB.getRange(1, 1, 1, sheetB.getLastColumn()).getValues()[0];
+    let headers = sheetB.getRange(1, 1, 1, sheetB.getLastColumn()).getValues()[0];
+    if (headers.indexOf('priority') === -1) {
+      const statusCol = headers.indexOf('status') + 1;
+      sheetB.insertColumnAfter(statusCol);
+      sheetB.getRange(1, statusCol + 1).setValue('priority');
+      if (sheetB.getLastRow() > 1) {
+        sheetB.getRange(2, statusCol + 1, sheetB.getLastRow() - 1, 1).setValue('Medium');
+      }
+      headers.splice(statusCol, 0, 'priority');
+    }
     let nameCol = headers.indexOf('clientName') + 1;
     if (!nameCol) {
       const emailCol = headers.indexOf('email') + 1;
@@ -153,9 +165,9 @@ function ensureSheets_() {
         sheetB.getRange(1, emailCol).setValue('clientName');
         nameCol = emailCol;
       } else {
-        sheetB.insertColumnAfter(5);
-        sheetB.getRange(1, 6).setValue('clientName');
-        nameCol = 6;
+        sheetB.insertColumnAfter(headers.indexOf('status') + 1);
+        sheetB.getRange(1, headers.indexOf('status') + 2).setValue('clientName');
+        nameCol = headers.indexOf('status') + 2;
       }
     }
     if (headers.indexOf('clientEmail') === -1) {
@@ -312,15 +324,17 @@ function getBillingRecords() {
     } else if (r[1] === 'Invoice') {
       if (!INVOICE_STATUSES.includes(status)) status = 'Draft';
     }
+    const priority = r[5] || 'Medium';
     return {
       id: r[0],
       type: r[1],
       description: r[2],
       amount: r[3],
       status: status,
-      clientName: r[5],
-      clientEmail: r[6],
-      subject: details.subject || '',
+      priority: priority,
+      clientName: r[6],
+      clientEmail: r[7],
+      subject: details.subject || r[8] || '',
       item: details.item || r[2],
       quoteDate: details.quoteDate ? Utilities.formatDate(new Date(details.quoteDate), Session.getScriptTimeZone(), 'yyyy-MM-dd') : ''
     };
@@ -467,6 +481,7 @@ function createQuoteFromNotes(notes) {
     fields.item,
     fields.amount,
     'Draft',
+    'Medium',
     quoteDate,
     '',
     ''
@@ -481,13 +496,14 @@ function createQuoteFromNotes(notes) {
     desc,
     fields.amount,
     'Draft',
+    'Medium',
     clientName,
     clientEmail,
     fields.subject
   ]);
 
   Logger.log('Cotización creada con ID: ' + quoteID);
-  return { success: true, quoteID: quoteID, ...fields };
+  return { success: true, quoteID: quoteID, priority: 'Medium', ...fields };
 }
 
 function createInvoiceFromNotes(notes) {
@@ -644,6 +660,7 @@ function createInvoiceFromNotes(notes) {
     fields.item,
     fields.amount,
     'Draft',
+    'Medium',
     invoiceDate,
     new Date()
   ]);
@@ -657,6 +674,7 @@ function createInvoiceFromNotes(notes) {
     desc,
     fields.amount,
     'Draft',
+    'Medium',
     fields.clientName,
     fields.clientEmail,
     fields.subject
@@ -670,7 +688,7 @@ function createInvoiceFromNotes(notes) {
   }
 
   Logger.log('Factura creada con ID: ' + invoiceID);
-  return { success: true, invoiceID: invoiceID, ...fields };
+  return { success: true, invoiceID: invoiceID, priority: 'Medium', ...fields };
 }
 
 // =========================
@@ -689,15 +707,15 @@ function updateQuote(data) {
 
   for (let i = 1; i < qVals.length; i++) {
     if (qVals[i][0] === data.id) {
-      qSheet.getRange(i+1,2,1,6).setValues([[data.clientName, data.clientEmail,
-        data.subject, data.item, data.amount, data.status]]);
+       qSheet.getRange(i+1,2,1,7).setValues([[data.clientName, data.clientEmail,
+        data.subject, data.item, data.amount, data.status, data.priority || 'Medium']]);
       break;
     }
   }
   for (let j = 1; j < bVals.length; j++) {
     if (bVals[j][0] === data.id) {
-      bSheet.getRange(j+1,3,1,5).setValues([[data.item || data.subject,
-        data.amount, data.status, data.clientName, data.clientEmail]]);
+      bSheet.getRange(j+1,3,1,6).setValues([[data.item || data.subject,
+        data.amount, data.status, data.priority || 'Medium', data.clientName, data.clientEmail]]);
       break;
     }
   }
@@ -751,19 +769,20 @@ function transformQuoteToInvoice(id) {
       qRow[5],
       'Draft',
       qRow[7],
+      qRow[8],
       new Date()
     ]);
 
     const bData = bSheet.getDataRange().getValues();
     for (let i = 1; i < bData.length; i++) {
       if (bData[i][0] === id && bData[i][1] === 'Quote') {
-        bSheet.getRange(i + 1, 1, 1, 5).setValues([[invoiceID, 'Invoice', bData[i][2], qRow[5], 'Draft']]);
+        bSheet.getRange(i + 1, 1, 1, 6).setValues([[invoiceID, 'Invoice', bData[i][2], qRow[5], 'Draft', qRow[7]]]);
         break;
       }
     }
 
     if (qIndex > 0) {
-      qSheet.getRange(qIndex + 1, 9).setValue(invoiceID);
+      qSheet.getRange(qIndex + 1, 10).setValue(invoiceID);
     }
 
     return { success: true, invoiceID: invoiceID };
@@ -786,9 +805,9 @@ function sendQuote(id) {
   const vals = sheet.getDataRange().getValues();
   for (let i = 1; i < vals.length; i++) {
     if (vals[i][0] === id && vals[i][1] === 'Quote') {
-      const email = vals[i][6];
-      const name = vals[i][5];
-      const subject = vals[i][7] || 'Cotización';
+      const email = vals[i][7];
+      const name = vals[i][6];
+      const subject = vals[i][8] || 'Cotización';
       GmailApp.sendEmail(
         email,
         subject,
@@ -821,9 +840,9 @@ function sendInvoice(id) {
   const vals = sheet.getDataRange().getValues();
   for (let i = 1; i < vals.length; i++) {
     if (vals[i][0] === id && vals[i][1] === 'Invoice') {
-      const email = vals[i][6];
-      const name = vals[i][5];
-      const subject = vals[i][7] || 'Factura';
+      const email = vals[i][7];
+      const name = vals[i][6];
+      const subject = vals[i][8] || 'Factura';
       GmailApp.sendEmail(
         email,
         subject,
@@ -924,20 +943,22 @@ function generateQuotePdf(quoteId) {
 function processGmailMessages() {
   const labelNames = ['Cotizaciones', 'Quotes', 'Facturas', 'Invoices'];
   const processedLabel = GmailApp.getUserLabelByName('Processed') || GmailApp.createLabel('Processed');
+
   labelNames.forEach(name => {
     const label = GmailApp.getUserLabelByName(name);
     if (!label) return;
-    const threads = label.getUnreadThreads();
-    threads.forEach(thread => {
-      const messages = thread.getMessages();
-      if (!messages.length) return;
-      const body = messages[0].getBody();
-      if (name === 'Cotizaciones' || name === 'Quotes') {
-        createQuoteFromEmail(body);
-      } else if (name === 'Facturas' || name === 'Invoices') {
-        createInvoiceFromEmail(body);
-      }
-      thread.markRead();
+    label.getUnreadThreads().forEach(thread => {
+      thread.getMessages().forEach(msg => {
+        if (!msg.isUnread()) return;
+
+        const body = msg.getPlainBody();
+        if (name === 'Facturas' || name === 'Invoices') {
+          createInvoiceFromNotes(body);
+        } else {
+          createQuoteFromNotes(body);
+        }
+        msg.markRead();
+      });
       thread.addLabel(processedLabel);
       thread.removeLabel(label);
     });
@@ -958,7 +979,7 @@ function followUpQuotesAndInvoices() {
   const emailMap = {};
   for (let i = 1; i < billingRows.length; i++) {
     const r = billingRows[i];
-    emailMap[r[0]] = r[6];
+    emailMap[r[0]] = r[7];
   }
 
  const qSheet = ss.getSheetByName(QUOTES_SHEET_NAME);
@@ -990,7 +1011,7 @@ function followUpQuotesAndInvoices() {
   if (iSheet) {
     iSheet.getDataRange().getValues().slice(1)
       .forEach(r => {
-        const iDate = new Date(r[8]);
+        const iDate = new Date(r[9]);
         if (isNaN(iDate)) {
           Logger.log('Invalid invoice date for ID: ' + r[0]);
           return;
@@ -1003,27 +1024,4 @@ function followUpQuotesAndInvoices() {
         }
       });
   }
-}
-
-function processGmailMessages() {
-  const labelName = 'konsul-billing';
-  const threads = GmailApp.search('label:' + labelName + ' is:unread');
-  const processedLabel = GmailApp.getUserLabelByName(labelName + '-processed') || GmailApp.createLabel(labelName + '-processed');
-
-  threads.forEach(thread => {
-    thread.getMessages().forEach(msg => {
-      if (!msg.isUnread()) return;
-      const body = msg.getPlainBody();
-      const subject = msg.getSubject().toLowerCase();
-      let res;
-      if (subject.includes('invoice') || subject.includes('factura')) {
-        res = createInvoiceFromNotes(body);
-      } else {
-        res = createQuoteFromNotes(body);
-      }
-      msg.markRead();
-      processedLabel.addToThread(thread);
-      Logger.log('Processed email with result: ' + JSON.stringify(res));
-    });
-  });
 }

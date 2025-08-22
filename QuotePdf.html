@@ -13,43 +13,45 @@
     th { background:#f2f2f2; text-align:left; }
     .client-info { margin-top:20px; margin-bottom:20px; }
     .totals { margin-top:30px; text-align:right; }
-    p { margin:4px 0; line-height:1.5; }
+    .pdf-content p { margin:4px 0; line-height:1.5; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="logo">
-      <? if (logo) { ?><img src="<?= logo ?>" alt="Logo"><? } ?>
+  <div class="pdf-content">
+    <div class="header">
+      <div class="logo">
+        <? if (logo) { ?><img src="<?= logo ?>" alt="Logo"><? } ?>
+      </div>
+      <div class="doc-details">
+        <h1>Cotización</h1>
+        <p><strong>Cotización #:</strong> <?= quoteID ?></p>
+        <p><strong>Fecha:</strong> <?= quoteDate ?></p>
+      </div>
     </div>
-    <div class="doc-details">
-      <h1>Cotización</h1>
-      <p><strong>Cotización #:</strong> <?= quoteID ?></p>
-      <p><strong>Fecha:</strong> <?= quoteDate ?></p>
+     <div class="client-info">
+      <p><strong>Cliente:</strong> <?= clientName ?> (<?= clientEmail ?>)</p>
     </div>
-  </div>
-  <div class="client-info">
-    <p><strong>Cliente:</strong> <?= clientName ?> (<?= clientEmail ?>)</p>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th>Descripción</th>
-        <th>Cantidad</th>
-        <th>Precio Unitario</th>
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><?= item ?></td>
-        <td>1</td>
-        <td><?= amount ?></td>
-        <td><?= amount ?></td>
-      </tr>
-    </tbody>
-  </table>
-  <div class="totals">
-    <p><strong>Total:</strong> <?= amount ?></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Descripción</th>
+          <th>Cantidad</th>
+          <th>Precio Unitario</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><?= item ?></td>
+          <td>1</td>
+          <td><?= amount ?></td>
+          <td><?= amount ?></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="totals">
+      <p><strong>Total:</strong> <?= amount ?></p>
+    </div>
   </div>
 </body>
 </html>

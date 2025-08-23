@@ -324,7 +324,7 @@ function getBillingRecords() {
     } else if (r[1] === 'Invoice') {
       if (!INVOICE_STATUSES.includes(status)) status = 'Draft';
     }
-    const priority = r[5] || 'Medium';
+    const priority = (r[5] || 'Medium').trim();
     return {
       id: r[0],
       type: r[1],

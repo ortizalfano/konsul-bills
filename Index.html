@@ -134,6 +134,10 @@
         <div class="modal-field"><label>Asunto</label><input type="text" id="edit-subject"></div>
         <div class="modal-field"><label>Item</label><input type="text" id="edit-item"></div>
         <div class="modal-field"><label>Monto</label><input type="number" id="edit-amount"></div>
+        <div class="modal-field">
+         <label>Estado</label>
+         <select id="edit-status"></select>
+       </div>
        <div class="modal-field"><label>Prioridad</label>
          <select id="edit-priority">
            <option value="High">Alta</option>
@@ -254,7 +258,12 @@
       const li = e.target.closest('li[data-filter-type]'); if (!li) return;
       const type = li.dataset.filterType, value = li.dataset.filterValue;
       if (type === 'priority') currentFilters.priority = currentFilters.priority === value ? null : value;
-      else if (type === 'type') currentFilters.type = value;
+      else if (type === 'type') {
+        currentFilters.type = value;
+        currentFilters.priority = null;
+        document.querySelectorAll('#priority-filters li')
+                .forEach(x => x.classList.remove('active'));
+      }
       document.querySelectorAll(`#${type}-filters li`).forEach(x => x.classList.toggle('active', x.dataset.filterValue === currentFilters[type]));
       applyFiltersAndRender();
     }
